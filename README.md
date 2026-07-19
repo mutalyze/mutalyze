@@ -17,6 +17,12 @@ Session: 1158ee04  (879 turns, 3h 12m)
 Rules:   7 found · 5 compiled · 2 unsupported
 Path:    main path numbered; 4 off-path lines (rewinds) kept but not numbered
 
+SESSION SHAPE  (tool-call phases — descriptive, never gates a check)
+  turns 8–74       debugging
+  turns 78–635     implementing
+  turns 639–728    exploring
+  turns 730–876    shipping
+
 VIOLATIONS (12)
 
   turn 142    CM005  Use `rg` (not `grep`) for searching.
@@ -29,6 +35,34 @@ VIOLATIONS (12)
 HELD (n rules, no violations)
 UNSUPPORTED (2 rules — see .ruleguard/checks.yaml, or --verbose)
 ```
+
+### The honest modal case: a quiet run
+
+Most first runs look like this — nothing broke. That is not a dead end: the
+session-shape block still tells you what the agent spent its time doing, and the
+counts tell you *why* it's quiet.
+
+```
+$ ruleguard check
+
+Session: 0a3f21c9  (312 turns, 41m)
+Rules:   4 found · 3 compiled · 1 unsupported
+Path:    main path numbered
+
+SESSION SHAPE  (tool-call phases — descriptive, never gates a check)
+  turns 3–58       exploring
+  turns 61–300     implementing
+
+VIOLATIONS (0) — every check held.
+
+HELD (3 rules, no violations)
+UNSUPPORTED (1 rule — see .ruleguard/checks.yaml, or --verbose)
+```
+
+`0 violations` here means *the compiled checks ran and held* — read it together
+with `3 compiled · 1 unsupported`. A quiet report can also mean your rules mostly
+compiled to `unsupported`; ruleguard always shows you which. See
+[Limitations](#limitations--read-before-trusting-a-green-run).
 
 ## Install & use
 
@@ -126,9 +160,12 @@ payload and raises if any raw content slipped in. See
   ruleguard will not catch it. Content alone can't tell a real key from a test
   fixture, so precision was chosen over coverage here. Do not read "secrets to
   disk" as full secret-scanning; it isn't one.
-- **Checkable rules skew trivial.** The rules that are easy to check mechanically
-  (`rg` vs `grep`, dangerous commands) aren't usually the ones you care about.
-  Rules needing judgement are marked `unsupported`, counted, never guessed at.
+- **Checkable rules skew trivial.** Across a sample of 128 real rules files, about
+  **~65% of normative rule lines are mechanically checkable** — but that 65% skews
+  toward the cheap ones (`rg` vs `grep`, dangerous commands), not the rules you
+  actually care about. Rules needing judgement are marked `unsupported`, counted,
+  never guessed at. See [FINDINGS.md](FINDINGS.md) for what that meant on a real
+  corpus (one style rule produced the overwhelming majority of findings).
 - **A quiet run is not a clean bill of health.** Zero findings can mean the agent
   complied — or that your rules mostly compiled to `unsupported`, or that the
   session didn't touch the checked surface. Read the `compiled` / `unsupported`
