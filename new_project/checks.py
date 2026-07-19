@@ -1,4 +1,4 @@
-"""The compiled-check data model and the .cellamind/checks.yaml (de)serializer.
+"""The compiled-check data model and the .new-project/checks.yaml (de)serializer.
 
 A Check is the executable form of one natural-language rule. checks.yaml is
 written to be human-readable and hand-editable — a user correcting a bad
@@ -99,7 +99,7 @@ class CompiledDoc:
         if self.unsupported:
             doc["unsupported"] = self.unsupported
         header = (
-            "# cellamind compiled checks — generated from your rules file.\n"
+            "# new-project compiled checks — generated from your rules file.\n"
             "# This file is meant to be edited. Fix a bad rule, delete a noisy\n"
             "# one, or move a rule between `checks` and `unsupported` by hand.\n"
         )

@@ -48,7 +48,7 @@ def find_repo_root(start: str) -> str:
 def code_extension_mix(repo_root: str, limit: int = 4000) -> dict:
     """Count source files by extension (bounded walk), skipping vendor dirs."""
     skip = {".git", "node_modules", ".venv", "venv", "dist", "build", "__pycache__",
-            ".cellamind", "target", ".next", "vendor"}
+            ".new-project", "target", ".next", "vendor"}
     counts: dict = {}
     seen = 0
     for root, dirs, files in os.walk(repo_root):

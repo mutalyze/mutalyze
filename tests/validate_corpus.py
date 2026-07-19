@@ -21,11 +21,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cellamind.checks import COMMAND, CONTENT, ORDERING  # noqa: E402
-from cellamind.code_strip import strip_code  # noqa: E402
-from cellamind.compile_rules import compile_rules  # noqa: E402
-from cellamind.execute import execute  # noqa: E402
-from cellamind.transcript import Transcript  # noqa: E402
+from new_project.checks import COMMAND, CONTENT, ORDERING  # noqa: E402
+from new_project.code_strip import strip_code  # noqa: E402
+from new_project.compile_rules import compile_rules  # noqa: E402
+from new_project.execute import execute  # noqa: E402
+from new_project.transcript import Transcript  # noqa: E402
 
 
 def raw_obj(path, line_no):

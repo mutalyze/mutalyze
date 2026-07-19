@@ -1,20 +1,17 @@
-# cellamind (rule-compliance monitor)
+# new-project (rule-compliance monitor)
 
 **Catches your coding agent breaking your own `CLAUDE.md` rules, and tells you which rule and at which turn.**
 
-> Separate project from the `~/cellamind` agent-integrity gate — this is the
-> rules-compliance monitor from the v1 brief. Folder kept apart on purpose.
-
 Every repo using an AI coding agent has a rules file (`CLAUDE.md` / `AGENTS.md`).
 The agent follows it at first, then over a long session quietly stops. Nothing
-errors. Nobody checks. cellamind reads your rules file and one session
+errors. Nobody checks. new-project reads your rules file and one session
 transcript and reports exactly which rules were broken, at which turn, with the
 literal evidence — so you can open the transcript and see it yourself.
 
 **No LLM judges a violation.** Every finding is a deterministic, citable fact.
 
 ```
-$ cellamind check
+$ new-project check
 
 Session: 1158ee04  (879 turns, 3h 12m)
 Rules:   7 found · 5 compiled · 2 unsupported
@@ -30,7 +27,7 @@ VIOLATIONS (12)
   ...
 
 HELD (n rules, no violations)
-UNSUPPORTED (2 rules — see .cellamind/checks.yaml, or --verbose)
+UNSUPPORTED (2 rules — see .new-project/checks.yaml, or --verbose)
 ```
 
 ## Install & use
@@ -39,11 +36,11 @@ UNSUPPORTED (2 rules — see .cellamind/checks.yaml, or --verbose)
 python -m venv .venv && ./.venv/bin/pip install -e .   # PyYAML is the only dep
 
 cd your-repo
-cellamind check                 # audits the newest session for this repo
-cellamind check path/to.jsonl   # a specific transcript
-cellamind check --json          # machine-readable
-cellamind check --verbose       # list held + unsupported rules individually
-cellamind check --recompile     # re-run rule compilation
+new-project check                 # audits the newest session for this repo
+new-project check path/to.jsonl   # a specific transcript
+new-project check --json          # machine-readable
+new-project check --verbose       # list held + unsupported rules individually
+new-project check --recompile     # re-run rule compilation
 ```
 
 Zero config: it auto-discovers the most recent Claude Code session for the
@@ -53,15 +50,15 @@ current directory, compiles your rules into checks, and runs them.
 
 Two strictly separated phases.
 
-**Phase 1 — compile** (`cellamind/compile_rules.py`, deterministic, no LLM).
+**Phase 1 — compile** (`new-project/compile_rules.py`, deterministic, no LLM).
 Reads `CLAUDE.md` / `AGENTS.md` (following symlink stubs), extracts normative
 lines, and compiles each into an executable check written to
-**`.cellamind/checks.yaml`** — human-readable and **meant to be hand-edited**.
+**`.new-project/checks.yaml`** — human-readable and **meant to be hand-edited**.
 A rule that can't be mapped to a mechanical check with confidence goes to
 `unsupported`, counted and named, never silently dropped and never turned into
 a shaky check.
 
-**Phase 2 — execute** (`cellamind/execute.py`, **no LLM calls, ever**). Streams
+**Phase 2 — execute** (`new-project/execute.py`, **no LLM calls, ever**). Streams
 the transcript once and evaluates every check. Every violation carries
 `(check_id, turn, line_id, line_no, evidence)`.
 
@@ -76,7 +73,7 @@ the transcript once and evaluates every check. Every violation carries
 ### The hard parts it handles
 
 - **Branch-safe turns.** Transcripts are trees (rewinds/edited prompts branch;
-  subagents are appended inline). cellamind traces the main path via parent
+  subagents are appended inline). new-project traces the main path via parent
   pointers, numbers turns along it only, and keeps each line's uuid so citations
   survive renumbering. Off-path and subagent lines are kept, not numbered.
 - **`Write` ≠ `Edit`.** `Edit`/`MultiEdit` added lines are checked; `Write` is

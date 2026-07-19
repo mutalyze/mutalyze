@@ -1,4 +1,4 @@
-"""Build a labeled synthetic transcript + CLAUDE.md, then assert cellamind's
+"""Build a labeled synthetic transcript + CLAUDE.md, then assert new-project's
 output matches the ground truth. Proves each check type fires and that the
 false-alarm guards hold. No network, no LLM."""
 
@@ -11,9 +11,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from cellamind.compile_rules import compile_rules  # noqa: E402
-from cellamind.execute import execute  # noqa: E402
-from cellamind.transcript import Transcript  # noqa: E402
+from new_project.compile_rules import compile_rules  # noqa: E402
+from new_project.execute import execute  # noqa: E402
+from new_project.transcript import Transcript  # noqa: E402
 
 CLAUDE_MD = """\
 # Project rules
@@ -142,7 +142,7 @@ def build(repo):
 
 def main():
     import tempfile
-    repo = tempfile.mkdtemp(prefix="cellamind_fix_")
+    repo = tempfile.mkdtemp(prefix="new-project_fix_")
     tpath = build(repo)
 
     doc = compile_rules(repo)
