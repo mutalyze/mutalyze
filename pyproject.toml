@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cellamind"
+version = "0.1.0"
+description = "Catches your coding agent breaking your own CLAUDE.md rules, and tells you which rule and at which turn."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "cellamind" }]
+keywords = ["claude", "agent", "claude-code", "rules", "compliance", "audit"]
+dependencies = ["PyYAML>=5.4"]
+
+[project.scripts]
+cellamind = "cellamind.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cellamind*"]
