@@ -3,426 +3,327 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="ruleguard reads your CLAUDE.md and one session transcript and reports which rule your coding agent broke, at which turn, with the literal evidence. Deterministic, no LLM judge.">
-<title>ruleguard — hold your coding agent to your own rules</title>
+<meta name="description" content="ruleguard checks what your AI coding agent actually did and shows you every rule it broke, with proof. Free, open source, runs on your machine.">
+<title>ruleguard — trust your AI agent, then check its work</title>
 </head>
 <body>
 <style>
   :root{
-    --bg:#f3f3f1; --tint:#ecedef; --surface:#ffffff; --surface-2:#fafaf9;
-    --ink:#16171c; --ink-2:#3c3f47; --muted:#6a6e77; --faint:#9a9ea7;
-    --line:rgba(22,23,28,.09); --line-2:rgba(22,23,28,.14);
-    --brand:#3355ff; --brand-2:#10c5be; --brand-ink:#2740dd;
-    --green:#12a36b; --amber:#e08a00; --red:#e5484d;
-    --grad:linear-gradient(118deg,#3355ff 0%,#4b7bff 42%,#10c5be 100%);
-    --mono:ui-monospace,"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --bg:#fcfcfa; --bg-2:#f4f3ee; --card:#ffffff; --ink:#161510; --ink-2:#403d34;
+    --muted:#6f6b60; --faint:#9c988b; --line:#e6e4dc; --line-2:#d8d5c9;
+    --red:#df342a; --red-soft:#fbe9e7; --green:#12855c; --green-soft:#e6f2ec; --amber:#c98400; --amber-soft:#f7efdd;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
     --sans:-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    --r:22px; --r-sm:13px;
-    --sh-sm:0 1px 2px rgba(24,26,42,.05);
-    --sh:0 2px 5px rgba(24,26,42,.05),0 16px 34px -16px rgba(30,34,64,.20);
-    --sh-lg:0 40px 90px -30px rgba(28,32,72,.34),0 8px 24px -12px rgba(28,32,72,.14);
-    --maxw:1160px;
+    --maxw:1080px; --read:720px;
     color-scheme:light;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;
-    -webkit-font-smoothing:antialiased;overflow-x:hidden}
-  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.035;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;font-size:17px}
   a{color:inherit;text-decoration:none}
-  ::selection{background:rgba(51,85,255,.18)}
+  ::selection{background:var(--ink);color:var(--bg)}
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 26px}
   .mono{font-family:var(--mono)}
-  .grad-t{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .u{border-bottom:3px solid var(--red);padding-bottom:1px}
 
-  /* ---------- nav ---------- */
-  nav.top{position:sticky;top:14px;z-index:50;margin:14px auto 0;max-width:var(--maxw);padding:0 14px}
-  .nav-in{display:flex;align-items:center;gap:22px;background:rgba(255,255,255,.72);
-    -webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);
-    border:1px solid var(--line);border-radius:16px;padding:11px 12px 11px 18px;box-shadow:var(--sh-sm)}
-  .brand{display:flex;align-items:center;gap:10px;font-weight:750;font-size:16.5px;letter-spacing:-.01em}
-  .mk{width:26px;height:26px;border-radius:8px;background:var(--grad);position:relative;box-shadow:0 4px 12px -3px rgba(51,85,255,.5)}
-  .mk::after{content:"";position:absolute;inset:0;border-radius:8px;
-    background:linear-gradient(135deg,rgba(255,255,255,.6),transparent 46%);-webkit-mask:linear-gradient(#000,#000);mask:linear-gradient(#000,#000)}
-  .mk i{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-family:var(--mono);font-weight:700;font-size:14px;font-style:normal}
-  .n-links{display:flex;gap:24px;margin:0 auto;font-size:14px;color:var(--ink-2);font-weight:480}
+  /* nav */
+  nav{position:sticky;top:0;z-index:40;background:rgba(252,252,250,.86);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-in{max-width:var(--maxw);margin:0 auto;padding:15px 26px;display:flex;align-items:center;gap:20px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.01em}
+  .mk{width:22px;height:22px;border:2px solid var(--ink);border-radius:6px;position:relative}
+  .mk::after{content:"";position:absolute;left:4px;top:9px;width:6px;height:3px;border-left:2px solid var(--red);
+    border-bottom:2px solid var(--red);transform:rotate(-45deg)}
+  .n-links{display:flex;gap:26px;margin-left:auto;font-size:15px;color:var(--muted)}
   .n-links a:hover{color:var(--ink)}
-  .n-cta{display:flex;gap:9px;align-items:center}
-  .btn{font-size:14px;font-weight:550;padding:10px 16px;border-radius:11px;display:inline-flex;align-items:center;gap:8px;
-    cursor:pointer;border:1px solid transparent;transition:.18s;white-space:nowrap}
-  .btn-ghost{background:var(--surface);border-color:var(--line);color:var(--ink);box-shadow:var(--sh-sm)}
-  .btn-ghost:hover{border-color:var(--line-2);transform:translateY(-1px)}
-  .btn-grad{background:var(--grad);color:#fff;box-shadow:0 6px 18px -6px rgba(51,85,255,.55)}
-  .btn-grad:hover{transform:translateY(-1px);box-shadow:0 10px 26px -8px rgba(51,85,255,.6)}
+  .btn{font-size:15px;font-weight:550;padding:10px 18px;border-radius:9px;display:inline-flex;align-items:center;gap:8px;
+    cursor:pointer;border:1px solid transparent;transition:.16s;white-space:nowrap}
+  .btn-dark{background:var(--ink);color:var(--bg)} .btn-dark:hover{transform:translateY(-1px);background:#000}
+  .btn-line{background:var(--card);border-color:var(--line-2);color:var(--ink)} .btn-line:hover{border-color:var(--ink)}
+  nav .btn{padding:9px 16px}
 
-  /* ---------- hero ---------- */
-  .hero{position:relative;text-align:center;padding:76px 0 0;overflow:hidden}
-  .hero .glow{position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:1200px;height:620px;
-    background:radial-gradient(46% 60% at 34% 32%,rgba(51,85,255,.24),transparent 62%),
-      radial-gradient(44% 56% at 70% 40%,rgba(16,197,190,.22),transparent 60%);
-    filter:blur(18px);pointer-events:none;z-index:0}
-  .hero > *{position:relative;z-index:1}
-  .badge{display:inline-flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);
-    border-radius:999px;padding:6px 6px 6px 14px;font-size:13px;color:var(--ink-2);box-shadow:var(--sh-sm);font-weight:480}
-  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(18,163,107,.16)}
-  .badge .pill{font-family:var(--mono);font-size:11.5px;background:var(--tint);border-radius:999px;padding:3px 9px;color:var(--muted)}
-  h1{font-size:clamp(2.7rem,6.2vw,4.7rem);line-height:1.02;letter-spacing:-.035em;font-weight:800;
-    margin:24px auto 0;max-width:16ch;text-wrap:balance}
-  .dek{font-size:clamp(1.08rem,1.7vw,1.32rem);color:var(--ink-2);max-width:60ch;margin:22px auto 0;font-weight:400}
-  .h-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:32px}
-  .h-cta .btn{padding:13px 22px;font-size:15px;border-radius:13px}
-  .undercta{margin-top:14px;font-family:var(--mono);font-size:12.5px;color:var(--faint)}
+  /* hero */
+  .hero{padding:86px 0 0;text-align:center}
+  .kick{font-size:14.5px;color:var(--muted);font-weight:500}
+  h1{font-size:clamp(2.5rem,6vw,4.3rem);line-height:1.04;letter-spacing:-.035em;font-weight:800;
+    margin:20px auto 0;max-width:17ch;text-wrap:balance}
+  .sub{font-size:clamp(1.1rem,1.9vw,1.34rem);color:var(--ink-2);max-width:44ch;margin:24px auto 0;line-height:1.5}
+  .h-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+  .h-cta .btn{padding:14px 24px;font-size:16px;border-radius:11px}
+  .runline{margin-top:16px;font-family:var(--mono);font-size:13.5px;color:var(--faint)}
+  .runline b{color:var(--muted);font-weight:500}
 
-  /* product card in hero */
-  .stage{position:relative;margin:56px auto 0;max-width:940px}
-  .float{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:12px;
-    box-shadow:var(--sh);padding:9px 13px;font-family:var(--mono);font-size:12px;display:flex;align-items:center;gap:8px;z-index:3}
-  .float .d{width:8px;height:8px;border-radius:50%}
-  .f-a{top:34px;left:-34px} .f-b{top:150px;right:-40px} .f-c{bottom:40px;left:-24px}
-  @media(max-width:1040px){.float{display:none}}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-lg);overflow:hidden}
-  .term-h{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
-  .term-h .d{width:11px;height:11px;border-radius:50%}
-  .term-h .t{margin-left:8px;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
-  .term-b{padding:20px 22px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.78;text-align:left}
-  .term-b pre{margin:0;white-space:pre}
-  .c-dim{color:var(--faint)} .c-key{color:var(--muted)}
-  .c-viol{color:var(--red);font-weight:650} .c-turn{color:var(--brand-ink);font-weight:600} .c-id{color:var(--amber)}
-  .c-rule{color:var(--ink)} .c-ev{color:var(--ink-2)} .c-hit{color:var(--red);background:rgba(229,72,77,.1);border-radius:4px;padding:0 3px}
-  .c-held{color:var(--green)}
+  /* report card (hero visual) */
+  .report{max-width:640px;margin:60px auto 0;background:var(--card);border:1px solid var(--line);border-radius:16px;
+    box-shadow:0 1px 2px rgba(20,20,10,.04),0 24px 50px -28px rgba(30,28,15,.28);overflow:hidden;text-align:left}
+  .rep-h{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line);
+    font-size:14px;color:var(--muted)}
+  .rep-h b{color:var(--ink);font-weight:650}
+  .rep-b{padding:8px 0}
+  .item{display:grid;grid-template-columns:20px 1fr;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .item:last-child{border-bottom:none}
+  .stat{width:11px;height:11px;border-radius:50%;margin-top:6px}
+  .s-red{background:var(--red)} .s-green{background:var(--green)} .s-amber{background:var(--amber)}
+  .lab{font-size:13px;font-weight:600;letter-spacing:.01em}
+  .lab.red{color:var(--red)} .lab.green{color:var(--green)} .lab.amber{color:var(--amber)}
+  .item h4{margin:3px 0 4px;font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .item .did{font-size:14px;color:var(--muted)}
+  .item .did code{font-family:var(--mono);font-size:13px;color:var(--ink-2);background:var(--bg-2);padding:1px 6px;border-radius:5px}
+  .rep-f{padding:14px 20px;background:var(--bg-2);font-size:13.5px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  .rep-f b{color:var(--ink)}
 
-  /* ---------- principle strip ---------- */
-  .strip{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:56px auto 0;max-width:900px}
-  .pchip{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);
-    border-radius:999px;padding:8px 15px;font-size:13.5px;color:var(--ink-2);box-shadow:var(--sh-sm)}
-  .pchip svg{width:15px;height:15px}
+  /* section */
+  section{padding:92px 0}
+  .center{text-align:center}
+  .eyebrow{font-size:13.5px;font-weight:650;letter-spacing:.02em;color:var(--red);text-transform:uppercase}
+  h2{font-size:clamp(1.85rem,3.6vw,2.7rem);letter-spacing:-.028em;font-weight:800;margin:12px 0 0;text-wrap:balance;line-height:1.08}
+  .lead{color:var(--muted);font-size:1.12rem;max-width:var(--read);margin:18px 0 0}
+  .center .lead{margin-left:auto;margin-right:auto}
 
-  /* ---------- section shell ---------- */
-  section{padding:96px 0}
-  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-ink);font-weight:600}
-  .h2{font-size:clamp(1.9rem,3.6vw,2.9rem);letter-spacing:-.028em;font-weight:800;margin:14px 0 0;text-wrap:balance}
-  .lead2{color:var(--muted);max-width:58ch;margin:16px 0 0;font-size:1.05rem}
-  .sec-head{max-width:640px}
-  .sec-head.center{margin:0 auto;text-align:center}
+  /* problem band */
+  .band{background:var(--ink);color:#f3f1e9}
+  .band h2{color:#fff}
+  .band .lead{color:#c7c3b6;font-size:1.22rem;max-width:30ch}
+  .band .quiet{margin-top:28px;font-family:var(--mono);font-size:14px;color:#8f8a7c;display:flex;flex-direction:column;gap:6px}
+  .band .quiet span::before{content:"— ";color:#5f5b50}
 
-  /* ---------- bento ---------- */
-  .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:18px;margin-top:52px}
-  .b{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:26px;box-shadow:var(--sh-sm);
-    position:relative;transition:transform .2s,box-shadow .2s;overflow:hidden}
-  .b:hover{transform:translateY(-3px);box-shadow:var(--sh)}
-  .b .cap{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--brand-ink)}
-  .b h3{font-size:1.28rem;letter-spacing:-.015em;margin:12px 0 8px;font-weight:700}
-  .b p{color:var(--muted);font-size:14.5px;margin:0}
-  .b code{font-family:var(--mono);font-size:.88em;color:var(--brand-ink);background:rgba(51,85,255,.07);padding:1px 5px;border-radius:5px}
-  .span4{grid-column:span 4} .span3{grid-column:span 3} .span2{grid-column:span 2}
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;margin-top:56px}
+  .step{}
+  .step .no{font-size:15px;font-family:var(--mono);color:var(--red);font-weight:600}
+  .step .bar{height:2px;background:var(--line-2);margin:12px 0 20px;position:relative}
+  .step .bar::after{content:"";position:absolute;left:0;top:0;height:2px;width:34px;background:var(--red)}
+  .step h3{font-size:1.32rem;letter-spacing:-.015em;margin:0 0 10px;font-weight:700}
+  .step p{color:var(--muted);font-size:15.5px;margin:0}
 
-  /* timeline instrument (light) */
-  .instr{margin-top:20px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,#fff,var(--surface-2));overflow:hidden}
-  .instr-h{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);
-    font-family:var(--mono);font-size:12px;color:var(--muted);flex-wrap:wrap;gap:8px}
-  .live{display:inline-flex;align-items:center;gap:7px;color:var(--brand-ink)}
-  .live .d{width:7px;height:7px;border-radius:50%;background:var(--brand);animation:pulse 1.9s ease-in-out infinite}
-  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(51,85,255,.45)}50%{box-shadow:0 0 0 5px rgba(51,85,255,0)}}
-  .track{position:relative;height:118px;margin:0 18px}
-  .axis{position:absolute;left:0;right:0;bottom:26px;height:1px;background:var(--line-2)}
-  .tick{position:absolute;bottom:26px;width:1.5px;background:rgba(51,85,255,.28);border-radius:2px}
-  .flag{position:absolute;bottom:26px;width:2px;background:var(--red)}
-  .flag .lab{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);white-space:nowrap;
-    font-family:var(--mono);font-size:10.5px;color:var(--red);background:rgba(229,72,77,.09);
-    border:1px solid rgba(229,72,77,.3);padding:2px 6px;margin-bottom:6px;border-radius:5px}
-  .held-span{position:absolute;bottom:26px;height:34px;background:rgba(18,163,107,.1);
-    border-left:1px solid rgba(18,163,107,.4);border-right:1px solid rgba(18,163,107,.4);border-radius:3px}
-  .scan{position:absolute;top:8px;bottom:26px;width:1.5px;background:linear-gradient(180deg,transparent,var(--brand),transparent);
-    animation:sweep 6.5s linear infinite;border-radius:2px}
-  @keyframes sweep{0%{left:2%}100%{left:98%}}
-  .axlab{position:absolute;bottom:5px;font-family:var(--mono);font-size:10.5px;color:var(--faint);transform:translateX(-50%);font-variant-numeric:tabular-nums}
+  /* two-up trust */
+  .trust{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:52px}
+  .tcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:32px}
+  .tcard .ic{width:40px;height:40px;border-radius:10px;background:var(--bg-2);display:grid;place-items:center;margin-bottom:18px}
+  .tcard .ic svg{width:20px;height:20px}
+  .tcard h3{font-size:1.32rem;letter-spacing:-.015em;margin:0 0 10px;font-weight:700}
+  .tcard p{color:var(--muted);font-size:15.5px;margin:0}
 
-  /* verdict stamps */
-  .vstack{display:flex;flex-direction:column;gap:12px;margin-top:18px}
-  .vrow{display:flex;align-items:center;gap:12px}
-  .stamp{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:7px;border:1.5px solid;flex:0 0 auto}
-  .st-red{color:var(--red);border-color:rgba(229,72,77,.5);background:rgba(229,72,77,.06)}
-  .st-green{color:var(--green);border-color:rgba(18,163,107,.5);background:rgba(18,163,107,.06)}
-  .st-amber{color:var(--amber);border-color:rgba(224,138,0,.5);background:rgba(224,138,0,.06)}
-  .vrow span.tx{font-size:14px;color:var(--muted)}
+  /* safety list */
+  .safe{margin-top:48px;max-width:760px}
+  .srow{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;padding:20px 0;border-top:1px solid var(--line)}
+  .srow:last-child{border-bottom:1px solid var(--line)}
+  .srow .warn{width:34px;height:34px;border-radius:10px;background:var(--red-soft);color:var(--red);
+    display:grid;place-items:center;font-weight:700;font-size:17px;flex:0 0 auto}
+  .srow b{font-weight:650;font-size:1.06rem} .srow p{color:var(--muted);font-size:14.5px;margin:3px 0 0}
 
-  /* check types list */
-  .clist{margin-top:16px;border-top:1px solid var(--line)}
-  .crow{display:grid;grid-template-columns:96px 1fr;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);align-items:baseline}
-  .crow .kk{font-family:var(--mono);font-size:12.5px;color:var(--brand-ink)}
-  .crow .vv{font-size:14px;color:var(--muted)}
+  /* honesty */
+  .honest{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:48px}
+  .hn{border-top:2px solid var(--ink);padding-top:20px}
+  .hn b{display:block;font-size:1.1rem;font-weight:700;letter-spacing:-.01em;margin-bottom:8px}
+  .hn p{color:var(--muted);font-size:14.5px;margin:0}
 
-  /* cite mini */
-  .cite{margin-top:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.7}
-  .cite .a{color:var(--brand-ink)} .cite .id{color:var(--amber)} .cite .d{color:var(--faint)} .cite .r{color:var(--red)}
+  /* footer cta */
+  .foot-cta{text-align:center;padding:104px 0}
+  .foot-cta h2{max-width:20ch;margin-left:auto;margin-right:auto}
+  .foot-cta .run{display:inline-flex;align-items:center;gap:12px;margin-top:30px;background:var(--ink);color:var(--bg);
+    font-family:var(--mono);font-size:15px;padding:14px 20px;border-radius:12px}
+  .foot-cta .run button{background:rgba(255,255,255,.16);border:none;color:var(--bg);font-family:var(--mono);font-size:12px;
+    padding:5px 10px;border-radius:7px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em}
+  .foot-cta .run button:hover{background:rgba(255,255,255,.28)}
+  footer{border-top:1px solid var(--line)}
+  .foot{display:flex;flex-wrap:wrap;gap:22px;align-items:center;padding:30px 0;color:var(--muted);font-size:14px}
+  .foot .brand{color:var(--ink)} .foot a:hover{color:var(--ink)} .foot .r{margin-left:auto;color:var(--faint);font-size:13px}
 
-  /* determinism stat */
-  .stat{display:flex;gap:26px;margin-top:20px}
-  .stat .n{font-size:2.6rem;font-weight:800;letter-spacing:-.03em;line-height:1}
-  .stat .n.grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .stat .lb{font-family:var(--mono);font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:6px}
-
-  /* safety pack */
-  .spgrid{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .sp{border:1px solid var(--line);border-radius:12px;padding:14px 15px;background:var(--surface-2)}
-  .sp .id{font-family:var(--mono);font-size:12px;color:var(--amber);font-weight:600}
-  .sp b{display:block;font-size:14px;margin:5px 0 3px;font-weight:650}
-  .sp p{font-size:13px;color:var(--muted)}
-
-  /* signals json */
-  .jsonc{margin-top:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:14px 16px;
-    font-family:var(--mono);font-size:12px;line-height:1.7;overflow-x:auto}
-  .jsonc .k{color:var(--brand-ink)} .jsonc .v{color:var(--green)} .jsonc .d{color:var(--faint)}
-
-  /* ---------- honesty band ---------- */
-  .band{background:var(--tint);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-  .honest{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:44px}
-  .hn{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:26px}
-  .hn .x{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(229,72,77,.1);color:var(--red);font-family:var(--mono);font-weight:700;font-size:15px}
-  .hn b{display:block;margin:16px 0 8px;font-size:1.06rem;font-weight:700;letter-spacing:-.01em}
-  .hn p{color:var(--muted);font-size:14px;margin:0}
-  .hn code{font-family:var(--mono);font-size:.86em;color:var(--brand-ink);background:rgba(51,85,255,.07);padding:1px 5px;border-radius:5px}
-
-  /* ---------- footer CTA ---------- */
-  .cta-panel{background:var(--grad);border-radius:28px;padding:64px 40px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--sh-lg)}
-  .cta-panel::before{content:"";position:absolute;inset:0;opacity:.5;
-    background:radial-gradient(40% 60% at 20% 10%,rgba(255,255,255,.32),transparent 60%)}
-  .cta-panel > *{position:relative}
-  .cta-panel h2{color:#fff;font-size:clamp(2rem,4.4vw,3.3rem);font-weight:800;letter-spacing:-.03em;margin:0;text-wrap:balance}
-  .cta-panel p{color:rgba(255,255,255,.86);max-width:52ch;margin:16px auto 0}
-  .install{display:inline-flex;align-items:center;gap:11px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);
-    border-radius:12px;padding:12px 15px;font-family:var(--mono);font-size:14px;color:#fff;backdrop-filter:blur(6px)}
-  .install button{margin-left:4px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);color:#fff;
-    font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:7px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em}
-  .install button:hover{background:rgba(255,255,255,.26)}
-  .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:26px;align-items:center}
-  .btn-white{background:#fff;color:var(--brand-ink);font-weight:600;padding:13px 22px;border-radius:13px;box-shadow:var(--sh)}
-  .btn-white:hover{transform:translateY(-1px)}
-  footer .foot{display:flex;flex-wrap:wrap;gap:22px;align-items:center;padding:34px 0 46px;color:var(--muted);font-size:13px}
-  footer .foot a:hover{color:var(--ink)}
-  footer .foot .brand{color:var(--ink);font-size:15px}
-  footer .foot .sp2{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--faint)}
-
-  @media(max-width:900px){
+  @media(max-width:820px){
     .n-links{display:none}
-    .bento{grid-template-columns:1fr}
-    .span4,.span3,.span2{grid-column:span 1}
-    .honest{grid-template-columns:1fr}
-    .stat{gap:20px}
+    .steps,.trust,.honest{grid-template-columns:1fr}
+    .steps{gap:34px}
   }
-  @media(prefers-reduced-motion:reduce){.scan,.live .d{animation:none}}
 </style>
 
-<nav class="top">
+<nav>
   <div class="nav-in">
-    <div class="brand"><span class="mk"><i>❯</i></span>ruleguard</div>
+    <div class="brand"><span class="mk"></span>ruleguard</div>
     <div class="n-links">
       <a href="#how">How it works</a>
-      <a href="#features">Features</a>
-      <a href="#pack">Safety pack</a>
-      <a href="#honest">Honesty</a>
+      <a href="#why">Why trust it</a>
+      <a href="#safety">Safety</a>
+      <a href="#limits">Honest limits</a>
     </div>
-    <div class="n-cta">
-      <a class="btn btn-ghost" href="#how">Docs</a>
-      <a class="btn btn-grad" href="#start">Get started</a>
-    </div>
+    <a class="btn btn-line" href="#start" style="margin-right:-8px">Get started</a>
   </div>
 </nav>
 
 <header class="hero">
-  <div class="glow"></div>
   <div class="wrap">
-    <span class="badge"><span class="dot"></span>Deterministic — no LLM in the verdict<span class="pill">v0.1</span></span>
-    <h1>Hold your coding agent to <span class="grad-t">your own rules.</span></h1>
-    <p class="dek">Your agent agreed to your <span class="mono">CLAUDE.md</span>, then quietly drifted. ruleguard reads one
-      session transcript and shows exactly which rule broke, at which turn, with the literal evidence.</p>
+    <div class="kick">For anyone shipping code with an AI agent</div>
+    <h1>Trust your AI agent. Then <span class="u">check its work.</span></h1>
+    <p class="sub">You give it rules. On a long task it quietly stops following them. ruleguard reviews what it did and
+      shows you every rule it broke — with proof.</p>
     <div class="h-cta" id="start">
-      <a class="btn btn-grad" href="#how">Get started →</a>
-      <a class="btn btn-ghost" href="#features">See how it works</a>
+      <a class="btn btn-dark" href="#how">Get started</a>
+      <a class="btn btn-line" href="#example">See an example</a>
     </div>
-    <div class="undercta">❯ pip install ruleguard</div>
+    <div class="runline"><b>❯</b> pip install ruleguard</div>
 
-    <div class="stage">
-      <div class="float f-a"><span class="d" style="background:var(--red)"></span>turn 142 · violated</div>
-      <div class="float f-b"><span class="d" style="background:var(--green)"></span>3 rules held</div>
-      <div class="float f-c"><span class="d" style="background:var(--amber)"></span>1 unresolved</div>
-      <div class="card">
-        <div class="term-h"><span class="d" style="background:#e5484d"></span><span class="d" style="background:#e08a00"></span>
-          <span class="d" style="background:#12a36b"></span><span class="t">ruleguard check — nugudom</span></div>
-        <div class="term-b"><pre><span class="c-dim">$ ruleguard check</span>
-
-<span class="c-key">Session:</span> 1158ee04  <span class="c-dim">(879 turns, 3h 12m)</span>
-<span class="c-key">Rules:  </span> 7 found · 5 checks · 2 unsupported
-
-<span class="c-viol">VIOLATIONS (2)</span>
-
-  <span class="c-turn">turn 142</span>   <span class="c-id">CM005</span>  <span class="c-rule">Use `rg` (not `grep`) for searching.</span>
-                <span class="c-ev">Bash → </span><span class="c-hit">grep</span><span class="c-ev"> -n "DATACENTERS" public/watchover.html</span>
-
-  <span class="c-turn">turn 213</span>   <span class="c-id">CM002</span>  <span class="c-rule">Never commit directly to `main`.</span>
-                <span class="c-ev">Bash → git commit -m "wip"</span>
-
-<span class="c-held">HELD (3 rules)</span>   <span class="c-dim">UNRESOLVED (1 — location from a shell variable)</span></pre></div>
+    <!-- plain-language report card -->
+    <div class="report" id="example">
+      <div class="rep-h"><span>Report — <b>your last session</b></span><span>7 rules checked</span></div>
+      <div class="rep-b">
+        <div class="item">
+          <span class="stat s-red"></span>
+          <div>
+            <div class="lab red">Broke a rule · step 142</div>
+            <h4>Use ripgrep (rg), not grep</h4>
+            <div class="did">What it did: ran <code>grep -n "…" watchover.html</code></div>
+          </div>
+        </div>
+        <div class="item">
+          <span class="stat s-red"></span>
+          <div>
+            <div class="lab red">Broke a rule · step 213</div>
+            <h4>Never commit straight to main</h4>
+            <div class="did">What it did: <code>git commit -m "wip"</code> on <code>main</code></div>
+          </div>
+        </div>
+        <div class="item">
+          <span class="stat s-green"></span>
+          <div>
+            <div class="lab green">Followed</div>
+            <h4>Read a file before editing it</h4>
+            <div class="did">Held for the whole session.</div>
+          </div>
+        </div>
+        <div class="item">
+          <span class="stat s-amber"></span>
+          <div>
+            <div class="lab amber">Couldn't tell</div>
+            <h4>One command it couldn't place</h4>
+            <div class="did">The folder came from a variable — so ruleguard flags it instead of guessing.</div>
+          </div>
+        </div>
       </div>
-    </div>
-
-    <div class="strip">
-      <span class="pchip"><svg viewBox="0 0 24 24" fill="none" stroke="#12a36b" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>Cites the turn &amp; the evidence</span>
-      <span class="pchip"><svg viewBox="0 0 24 24" fill="none" stroke="#3355ff" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>Zero LLM calls</span>
-      <span class="pchip"><svg viewBox="0 0 24 24" fill="none" stroke="#12a36b" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>Your code never leaves the machine</span>
-      <span class="pchip"><svg viewBox="0 0 24 24" fill="none" stroke="#3355ff" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>Zero config · MIT</span>
+      <div class="rep-f"><span><b>2 broken</b> · 3 followed · 1 unclear</span><span>Nothing left your computer.</span></div>
     </div>
   </div>
 </header>
 
-<!-- HOW / FEATURES bento -->
-<section id="features">
-  <div class="wrap">
-    <div class="sec-head center">
-      <span class="eyebrow">How it works</span>
-      <h2 class="h2">Everything it checks. Nothing it fakes.</h2>
-      <p class="lead2" style="margin-left:auto;margin-right:auto">Compile your rules once, then execute against the log —
-        deterministically. Every finding is a fact you can open the transcript and verify.</p>
-    </div>
-
-    <div class="bento" id="how">
-      <!-- timeline (wide) -->
-      <div class="b span4">
-        <span class="cap">Branch-safe · turn-indexed</span>
-        <h3>One pass. Correct turn numbers across rewinds &amp; subagents.</h3>
-        <p>ruleguard traces the main path through the transcript and pins every finding to a real turn — so a citation
-          always resolves to the exact line.</p>
-        <div class="instr">
-          <div class="instr-h">
-            <span><span class="live"><span class="d"></span>SESSION 1158ee04</span> · 879 turns</span>
-            <span><span style="color:var(--red)">2 violations</span> · <span style="color:var(--green)">3 held</span> · <span style="color:var(--amber)">1 unresolved</span></span>
-          </div>
-          <div class="track" id="track"></div>
-        </div>
-      </div>
-
-      <!-- verdicts -->
-      <div class="b span2">
-        <span class="cap">Three verdicts</span>
-        <h3>Violated, held — or unresolved.</h3>
-        <div class="vstack">
-          <div class="vrow"><span class="stamp st-red">Violated</span><span class="tx">broke it — cited to the turn.</span></div>
-          <div class="vrow"><span class="stamp st-green">Held</span><span class="tx">ran and passed.</span></div>
-          <div class="vrow"><span class="stamp st-amber">Unresolved</span><span class="tx">can't place it — won't claim it.</span></div>
-        </div>
-      </div>
-
-      <!-- check types -->
-      <div class="b span2">
-        <span class="cap">Reads the payloads</span>
-        <h3>Three check types.</h3>
-        <div class="clist">
-          <div class="crow"><span class="kk">command</span><span class="vv"><code>Bash</code> inputs</span></div>
-          <div class="crow"><span class="kk">content</span><span class="vv"><code>Write / Edit</code> added lines</span></div>
-          <div class="crow"><span class="kk">ordering</span><span class="vv">the sequence of tool calls</span></div>
-        </div>
-      </div>
-
-      <!-- cite -->
-      <div class="b span2">
-        <span class="cap">Cites the turn</span>
-        <h3>Verify, don't trust.</h3>
-        <div class="cite"><span class="a">turn 142</span> · <span class="id">CM005</span><br><span style="color:var(--ink)">Use `rg`, not `grep`.</span><br><span class="d">Bash →</span> <span class="r">grep</span> -n "DATA…"</div>
-      </div>
-
-      <!-- determinism -->
-      <div class="b span2">
-        <span class="cap">Deterministic</span>
-        <h3>No model. No network.</h3>
-        <div class="stat">
-          <div><div class="n grad">0</div><div class="lb">LLM calls</div></div>
-          <div><div class="n">1</div><div class="lb">streaming pass</div></div>
-        </div>
-      </div>
-
-      <!-- safety pack -->
-      <div class="b span3" id="pack">
-        <span class="cap">Built-in · needs no rules file</span>
-        <h3>A safety pack, shipped with its verifier.</h3>
-        <div class="spgrid">
-          <div class="sp"><span class="id">SP001</span><b>Never force-push</b><p>Not the safe <code style="all:unset;font-family:var(--mono);color:var(--brand-ink)">--force-with-lease</code>.</p></div>
-          <div class="sp"><span class="id">SP002</span><b>No curl | sh</b><p>Heredocs &amp; quoted docs don't count.</p></div>
-          <div class="sp"><span class="id">SP003</span><b>No rm -rf of ~ or /</b><p>Recursive deletes of home / root.</p></div>
-          <div class="sp"><span class="id">SP004</span><b>No keys to disk</b><p>Real credential files only.</p></div>
-        </div>
-      </div>
-
-      <!-- telemetry -->
-      <div class="b span3">
-        <span class="cap">Local by default</span>
-        <h3>Your code never leaves your machine.</h3>
-        <p>The optional team payload sends only hashes, categories &amp; counts — a leak-guard refuses if any raw content
-          slips in. <code>--signals</code> is a flag, never a default.</p>
-        <div class="jsonc"><span class="k">"rule_uid"</span>: <span class="v">"367f…2cf5"</span>, <span class="k">"verdict"</span>: <span class="v">"violated"</span>, <span class="k">"turns"</span>: [142, 213]
-<span class="d"># no command, no path, no rule text — ever</span></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- HONESTY BAND -->
+<!-- PROBLEM -->
 <div class="band">
-  <section id="honest" style="padding:80px 0">
+  <section>
     <div class="wrap">
-      <div class="sec-head">
-        <span class="eyebrow">Honest by default</span>
-        <h2 class="h2">What it <span style="color:var(--red)">won't</span> do.</h2>
-        <p class="lead2">The instrument is only worth trusting if it's straight about its own edges. These are in the
-          README, not the fine print.</p>
-      </div>
-      <div class="honest">
-        <div class="hn"><div class="x">✗</div><b>Checkable rules skew trivial.</b><p>The rules easy to check mechanically usually aren't the ones that matter. Those get marked <code>unsupported</code> — counted, never faked.</p></div>
-        <div class="hn"><div class="x">✗</div><b>“Secrets to disk” is scoped.</b><p>It catches a key written to <code>.env</code> or <code>id_rsa</code> — not one hard-coded into <code>config.ts</code>. Not a full secret scanner.</p></div>
-        <div class="hn"><div class="x">✗</div><b>A quiet run isn't a clean bill of health.</b><p>Zero findings can mean compliance — or that your rules compiled to <code>unsupported</code>. Read the counts, not just the violation number.</p></div>
+      <span class="eyebrow" style="color:#ff7a6e">The problem</span>
+      <h2>It follows your rules —<br>until it doesn't.</h2>
+      <p class="lead">On a long task, an AI agent drifts. Nothing errors. The tests still pass. You find out when
+        something's already wrong.</p>
+      <div class="quiet">
+        <span>it stops running the tests you asked for</span>
+        <span>it edits files it never opened</span>
+        <span>it reaches for the shortcut you told it to avoid</span>
       </div>
     </div>
   </section>
 </div>
 
-<!-- FOOTER CTA -->
-<footer>
-  <section style="padding:90px 0 0">
-    <div class="wrap">
-      <div class="cta-panel">
-        <h2>Find out what your agent actually did.</h2>
-        <p>Zero config. It auto-discovers the newest Claude Code session for your repo, compiles your rules, and runs.</p>
-        <div class="cta-row">
-          <div class="install"><span style="opacity:.7">❯</span>pip install ruleguard &amp;&amp; ruleguard check<button id="copy" type="button">copy</button></div>
-          <a class="btn btn-white" href="#">View on GitHub</a>
-        </div>
+<!-- HOW -->
+<section id="how">
+  <div class="wrap center">
+    <span class="eyebrow">How it works</span>
+    <h2>Three steps. One command.</h2>
+    <p class="lead">Run it after your agent finishes. No setup, no accounts, no uploading.</p>
+  </div>
+  <div class="wrap">
+    <div class="steps">
+      <div class="step">
+        <div class="no">01</div><div class="bar"></div>
+        <h3>Point it at a session</h3>
+        <p>One command after your agent is done. It finds the latest session for your project on its own.</p>
       </div>
-      <div class="foot">
-        <span class="brand" style="font-weight:750">ruleguard</span>
-        <a href="#how">How it works</a><a href="#features">Features</a><a href="#pack">Safety pack</a>
-        <a href="#honest">Honesty</a><a href="#">The method</a>
-        <span class="sp2">MIT · deterministic · Claude Code · v0.1</span>
+      <div class="step">
+        <div class="no">02</div><div class="bar"></div>
+        <h3>It checks the work</h3>
+        <p>ruleguard compares what the agent actually did against the rules you set — reading the real commands and
+          edits, not a summary.</p>
+      </div>
+      <div class="step">
+        <div class="no">03</div><div class="bar"></div>
+        <h3>You get the receipts</h3>
+        <p>A short report: which rule broke, the exact step it happened, and the command or line that proves it.</p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
+
+<!-- WHY TRUST -->
+<section id="why">
+  <div class="wrap">
+    <span class="eyebrow">Why you can trust it</span>
+    <h2>It doesn't ask an AI to grade an AI.</h2>
+    <div class="trust">
+      <div class="tcard">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#161510" stroke-width="2"><path d="M4 12l5 5L20 6"/></svg></div>
+        <h3>It shows you the proof</h3>
+        <p>No model decides whether a rule broke. ruleguard points at the exact command or line and the step it
+          happened — so you can open the session and see it for yourself.</p>
+      </div>
+      <div class="tcard">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#161510" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+        <h3>Your code never leaves</h3>
+        <p>Everything runs on your machine. Nothing is uploaded, nothing is sent anywhere. The optional team summary
+          shares only anonymised counts — never your code.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SAFETY -->
+<section id="safety" style="background:var(--bg-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <span class="eyebrow">Built-in</span>
+    <h2>It catches the dangerous stuff — even with no rules set.</h2>
+    <p class="lead">Out of the box, ruleguard flags the things nobody remembers to write down:</p>
+    <div class="safe">
+      <div class="srow"><span class="warn">!</span><div><b>Deleting your home or system folders</b><p>A wipe of the wrong directory — not your project's temp files.</p></div></div>
+      <div class="srow"><span class="warn">!</span><div><b>Writing a password or key into a file</b><p>A real secret landing in a credentials file.</p></div></div>
+      <div class="srow"><span class="warn">!</span><div><b>Force-pushing over shared history</b><p>The kind that overwrites a teammate's work.</p></div></div>
+      <div class="srow"><span class="warn">!</span><div><b>Running code piped straight off the internet</b><p>Downloading a script and running it unchecked.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- HONESTY -->
+<section id="limits">
+  <div class="wrap">
+    <span class="eyebrow">Honest by default</span>
+    <h2>What it won't do.</h2>
+    <p class="lead">A checker is only worth trusting if it's straight about its own edges.</p>
+    <div class="honest">
+      <div class="hn"><b>It tells you what it can't check.</b><p>Some rules are too fuzzy to verify (“write clean code”). ruleguard lists those plainly instead of pretending it checked them.</p></div>
+      <div class="hn"><b>It's a rule checker, not a security scanner.</b><p>It flags a secret written to a credentials file — not one buried deep in your source. It won't pretend to be more than that.</p></div>
+      <div class="hn"><b>A quiet report isn't a guarantee.</b><p>No rules broken can also mean none of your rules could be checked. ruleguard always shows you which it is.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER CTA -->
+<section class="foot-cta">
+  <div class="wrap">
+    <span class="eyebrow">Try it on your last session</span>
+    <h2>See what your agent really did.</h2>
+    <div class="run"><span style="opacity:.6">❯</span>pip install ruleguard &amp;&amp; ruleguard check<button id="copy" type="button">copy</button></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <span class="brand" style="font-weight:700">ruleguard</span>
+    <a href="#how">How it works</a><a href="#why">Why trust it</a><a href="#safety">Safety</a><a href="#limits">Limits</a>
+    <a href="#">GitHub</a>
+    <span class="r">Free &amp; open source · runs on your machine</span>
+  </div>
 </footer>
 
 <script>
   var b=document.getElementById('copy');
   if(b)b.addEventListener('click',function(){navigator.clipboard&&navigator.clipboard.writeText('pip install ruleguard && ruleguard check');
-    var o=b.textContent;b.textContent='copied ✓';setTimeout(function(){b.textContent=o},1400)});
-  (function(){
-    var t=document.getElementById('track');if(!t)return;var total=879;
-    function pct(x){return x/total*96+2}
-    var ticks=[8,14,19,26,33,41,47,52,58,63,69,74,79,83,88,92,97,103,110,118,125,131,138,140,145,151,159,166,172,181,
-      190,198,205,213,221,230,240,255,268,281,299,318,340,362,388,410,435,462,490,520,548,575,601,630,662,690,716,742,770,799,828,852,876];
-    var h='';for(var i=0;i<ticks.length;i++){var hh=7+((ticks[i]*37)%14);h+='<span class="tick" style="left:'+pct(ticks[i]).toFixed(2)+'%;height:'+hh+'px"></span>'}
-    h+='<span class="held-span" style="left:'+pct(300).toFixed(2)+'%;width:'+(pct(548)-pct(300)).toFixed(2)+'%"></span>';
-    [[142,'t142 · CM005'],[213,'t213 · CM002']].forEach(function(f){h+='<span class="flag" style="left:'+pct(f[0]).toFixed(2)+'%;height:44px"><span class="lab">'+f[1]+'</span></span>'});
-    h+='<span class="axis"></span><span class="scan"></span>';
-    [0,220,440,660,879].forEach(function(n){h+='<span class="axlab" style="left:'+pct(n).toFixed(2)+'%">'+n+'</span>'});
-    t.innerHTML=h;
-  })();
+    var o=b.textContent;b.textContent='copied';setTimeout(function(){b.textContent=o},1300)});
 </script>
 
 </body>
