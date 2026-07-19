@@ -289,14 +289,19 @@ def execute(checks: List[Check], transcript: Transcript,
         # ---------- content ----------
         added = _added_text(tc, transcript.created_paths)
         for fpath, text in added:
-            if not _under(fpath, root):
-                continue  # file lives outside the governed repo
+            in_repo = _under(fpath, root)
             ext = os.path.splitext(fpath or "")[1].lstrip(".")
             for c in content_checks:
                 if not (c.forbid or c.forbid_pattern):
                     continue
+                # repo-scoped checks only count in-repo; session-scoped (e.g. a
+                # secret-to-disk check) fire wherever the file was written.
+                if c.scope != "session" and not in_repo:
+                    continue
                 if not _applies(fpath, c.applies_to):
                     continue
+                if fpath and any(x in fpath for x in c.exclude_paths):
+                    continue  # example / test / fixture / doc path — benign by destination
                 stripped = strip_code(text, ext)
                 hits = _content_hits(text, stripped, c, pat_of[c.id])
                 if hits:

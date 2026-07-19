@@ -88,6 +88,33 @@ That is still differentiator #1, measured — just stated as "authored rules don
 cry wolf," which is what the data supports, rather than "authored rules catch
 10× more," which it doesn't.
 
+**Safety-pack false-positive sweep (the pack is the surface a new user meets
+first).** Because the corpus has 0 dangerous events, every pack hit in it is a
+known false alarm by construction — a clean false-positive test bed. But the
+sweep found **0 hits**, and that's *not* a pass: this corpus (one dev's frontend
+work) contains no force-pushes, no `curl | sh`, no secret-writing, and none of
+the benign look-alikes either. The corpus is silent on the pack, so it can't
+clear it. Testing the patterns against external benign look-alikes instead found
+**four false positives, all fixed**:
+
+| rule | fired on (benign) | fix |
+|---|---|---|
+| SP001 | `git push --force-with-lease` (the *safe* force-push) | require `--force`/`-f`, exclude `--force-with-lease` |
+| SP002 | `curl … | sh` inside a heredoc writing a doc | strip heredoc bodies before matching |
+| SP004 | the AWS docs example key `AKIA…EXAMPLE` | negative-lookahead exclude it |
+| SP004 | a key in `.env.example` / a test-fixture `.pem` | **destination-scope**: only real credential files, exclude example/test/fixture/doc paths |
+
+SP004 can't be made precise on content (a fixture key and a real key are
+pattern-identical), so it now fires only when a secret-shaped string lands in a
+real credential file (`.env`, `id_rsa`, `*.pem`, `credentials`, …) outside
+example/test paths. **Coverage gap, stated:** a secret hard-coded into a source
+file (`config.ts`) no longer fires — precision bought at the cost of that case.
+
+Two of those four I first *mislabeled as true positives* while writing the test —
+defending my own rule, the same blind spot again. The external look-alikes are
+what caught it; my unit cases wouldn't have (they'd have encoded the same blind
+spot, exactly as SP003's own 19 cases missed SP003).
+
 ---
 
 ## 3. Scope is never inferred from prose.
@@ -144,3 +171,27 @@ built-in safety pack likely the only thing a stranger's first run ever sees fire
 The telemetry contract ([`TELEMETRY.md`](TELEMETRY.md), enforced by
 `assert_clean()`) is locked now for the same reason. Dogfood interim: a real
 [`CLAUDE.md`](CLAUDE.md) governs this repo — a week under it is a genuine n=1.
+
+---
+
+## The real finding is the method, not the number
+
+This corpus scored down to ~1 non-trivial finding, so the violation rate isn't
+the story. The story is the instrument plus three traps — each hit, named, and
+fixed here — that anyone building this class of tool will hit too:
+
+1. **Precision quoted off the tuning set.** The first "0% false alarms" was
+   measured on the sessions the compiler was tuned on. Fix: a held-out split.
+2. **Adjudication drifting after seeing results.** The invocation-vs-target
+   relabel moved precision 86% → 100% *after* the number was in view — the
+   held-out failure arriving through the labeling side. Fix: freeze the
+   adjudication rules before scoring (§0).
+3. **Authored rules are broader than their author thinks.** SP003 fired on
+   `rm -f /tmp/x`; SP004 on the AWS example key and test fixtures — and I twice
+   tried to relabel those benign hits as true positives. Fix: test against
+   external look-alikes, not author-written unit cases; scope by destination
+   when content can't discriminate.
+
+Same shape all three: a claim resting on a guess I couldn't see I was making.
+That's the honest write-up — more useful to a reader than any number this corpus
+could have produced.

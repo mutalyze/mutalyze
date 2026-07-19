@@ -24,11 +24,35 @@ def _blank(s: str) -> str:
     return "".join("\n" if ch == "\n" else " " for ch in s)
 
 
+def _blank_heredocs(text: str) -> str:
+    """Blank the BODY of shell heredocs (`cmd <<'EOF' … EOF`). The body is data
+    or another language, not shell being executed — a `curl … | sh` written into
+    a doc via a heredoc isn't a command being run. Keeps the opening line."""
+    import re as _re
+
+    out = []
+    delim = None
+    for line in text.split("\n"):
+        if delim is None:
+            out.append(line)
+            m = _re.search(r"<<-?\s*[\"']?([A-Za-z_]\w*)[\"']?", line)
+            if m:
+                delim = m.group(1)
+        else:
+            if line.strip() == delim:
+                delim = None
+            out.append("")  # blank body and closing-delimiter line
+    return "\n".join(out)
+
+
 def strip_code(text: str, ext: str) -> str:
     ext = (ext or "").lower()
     c_family = ext in _C_FAMILY or ext == ""
     hash_family = ext in _HASH_FAMILY or ext == ""
     triple = ext in ("py",) or ext == ""
+
+    if hash_family and "<<" in text:
+        text = _blank_heredocs(text)
 
     out = []
     i, n = 0, len(text)

@@ -28,7 +28,9 @@ def builtin_checks() -> List[Check]:
             id="SP001",
             rule="Never force-push (`git push --force` / `-f`).",
             type=COMMAND,
-            forbid_pattern=r"git\s+push\b[^\n|;&]*\s(?:--force\b|--force-with-lease\b|-f\b)",
+            # --force / -f only. --force-with-lease is the *safe* force-push and
+            # must NOT fire (a false positive on a personal branch teaches distrust).
+            forbid_pattern=r"git\s+push\b[^\n|;&]*\s(?:--force(?!-with-lease)\b|-f\b)",
             scope="session",
         ),
         Check(
@@ -53,9 +55,20 @@ def builtin_checks() -> List[Check]:
         ),
         Check(
             id="SP004",
-            rule="Never write a private key or cloud credential to a file.",
+            rule="Never write a private key or cloud credential to a real credential file.",
             type=CONTENT,
-            forbid_pattern=r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}",
+            # Content alone can't tell a real key from a fixture — they're
+            # pattern-identical. So scope by DESTINATION: only fire when a
+            # secret-shaped string lands in a real credential file, and exclude
+            # example/test/fixture/doc paths and the AWS docs example key.
+            forbid_pattern=(
+                r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"
+                r"|AKIA(?!IOSFODNN7EXAMPLE)[0-9A-Z]{16}"
+            ),
+            applies_to=[".env", ".envrc", "*.pem", "*.key", "*.p12", "*.pfx",
+                        "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "credentials"],
+            exclude_paths=["example", "sample", "template", "fixture", "mock",
+                           "dummy", "/test", "test/", "spec", ".md", "node_modules"],
             scope="session",
         ),
     ]

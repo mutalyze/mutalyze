@@ -46,6 +46,10 @@ class Check:
     # content only: shell globs (matched against the file's basename); empty
     # means "applies to every Write/Edit".
     applies_to: List[str] = field(default_factory=list)
+    # content only: substrings that, if present in the file path, EXCLUDE it —
+    # so a key-shaped string in test/fixtures/example/*.md never fires. A benign
+    # look-alike wearing a scary rule name is worse than an ordinary FP.
+    exclude_paths: List[str] = field(default_factory=list)
 
     # ordering only. A `trigger` tool call must be accompanied by either:
     #   - a `require_before` tool call within `within_turns` prior turns
@@ -75,6 +79,8 @@ class Check:
             out["scope"] = self.scope
         if self.applies_to:
             out["applies_to"] = self.applies_to
+        if self.exclude_paths:
+            out["exclude_paths"] = self.exclude_paths
         if self.trigger:
             out["trigger"] = self.trigger
         if self.require_before:
@@ -130,6 +136,7 @@ def load_checks(path: str) -> CompiledDoc:
                 when_branch=raw.get("when_branch"),
                 scope=str(raw.get("scope", "repo") or "repo"),
                 applies_to=list(raw.get("applies_to", []) or []),
+                exclude_paths=list(raw.get("exclude_paths", []) or []),
                 trigger=raw.get("trigger"),
                 require_before=raw.get("require_before"),
                 require_after=raw.get("require_after"),
