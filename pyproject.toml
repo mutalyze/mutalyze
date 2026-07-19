@@ -3,19 +3,19 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "new-project"
+name = "ruleguard"
 version = "0.1.0"
 description = "Catches your coding agent breaking your own CLAUDE.md rules, and tells you which rule and at which turn."
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
-authors = [{ name = "new-project" }]
+authors = [{ name = "ruleguard" }]
 keywords = ["claude", "agent", "claude-code", "rules", "compliance", "audit"]
 dependencies = ["PyYAML>=5.4"]
 
 [project.scripts]
-new-project = "new_project.cli:main"
+ruleguard = "ruleguard.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["new_project*"]
+include = ["ruleguard*"]

@@ -1,103 +1,118 @@
-# Findings — the first measured number
+# Findings
 
-> Part 6 of the brief: run v1 over real sessions, **open the transcript at every
-> cited turn and hand-check each violation**, then report the validated numbers.
-> This is that report. Read the caveats — the headline number is real but it is
-> not yet the commercial number, and the difference matters.
+Run of the v1 detector over the 7 real Claude Code sessions on this machine,
+with a representative 7-rule `CLAUDE.md`, every finding hand-inspected. Three
+things came out of it — the third is the one worth publishing.
 
-## Setup
+---
 
-- **Corpus:** the 7 real Claude Code sessions on this machine (all that exist
-  here). Sizes: 2–10,418 lines; 2,946 numbered main-path turns in total.
-- **Rules:** a representative 7-rule `CLAUDE.md` (never commit to `main`; read
-  before edit; no `console.log`; no inline `style=`; no `rm -rf`; use `rg` not
-  `grep`; run `git status` before committing). 5 compiled, 2 marked
-  `unsupported`.
-- **Validation:** an independent harness (`tests/validate_corpus.py`) re-derives
-  the truth from each cited transcript line — for commands it re-checks the
-  forbidden token survives string-stripping and isn't in a `cd`-away script; for
-  content it re-strips comments/strings; for ordering it scans the whole main
-  path for a prior sight of the file. Findings that failed inspection were
-  treated as false alarms and the compiler/executor tightened until none
-  remained.
+## 1. The headline isn't the violation rate. It's *what* the checkable rules are.
 
-## The three metrics (per the brief)
+Of 70 findings across 3,129 turns, **66 come from one rule: "use `rg` not
+`grep`."** Another 4 are "never `rm -rf`." The other three compiled rules —
+no `console.log`, read-before-edit, no inline `style=` — produced **zero**
+in-repo findings.
 
-| Metric | Value |
-|---|---|
-| **Verified violations per 100 turns** (headline) | **4.7** (139 verified / 2,946 turns) |
-| **False-alarm rate** (share not surviving inspection) | **0%** — *after* two tuning rounds (see below) |
-| **Fraction of compiled rules broken ≥ once** | **4 of 5** |
+That is not noise, it's the result. **The rules that are cheap to check
+mechanically are the trivial ones.** A tool-name swap and a dangerous-command
+grep are trivially checkable; "did the agent read the file before editing it,"
+"is this refactor actually behavior-preserving," "did it weaken a test to go
+green" are the rules that matter, and they are either unsupported or almost
+never fire.
 
-Per check (all verified true): `rg`-not-`grep` 100 · no-`console.log` 19 ·
-no-`rm -rf` 17 · read-before-edit 3. Commit-on-`main` compiled but never
-legitimately fired.
+Part 2 of the brief measured that ~65% of rules are *mechanically checkable*.
+True — but that 65% is skewed toward the cheap end. The number nobody has
+measured is **useful ∩ checkable**, and this corpus suggests it's much smaller.
+That's a better Show HN than any violation rate: *"I built the rule-compliance
+checker everyone keeps proposing, ran it on real sessions, and found the
+checkable rules aren't the ones you care about."*
 
-Per session (main-path turns → verified violations):
+| Compiled rule | in-repo findings | character |
+|---|---:|---|
+| use `rg` not `grep` | 66 | trivial (style) |
+| never `rm -rf` | 4 | trivial (safety) |
+| no `console.log` | 0 | would matter — never fired in-repo |
+| read before edit | 0 | would matter — never fired in-repo |
+| never commit to `main` | 0 | matters — never fired (all commits were out-of-repo) |
 
-| Session | turns | violations | note |
-|---|---|---|---|
-| 1158ee04 | 879 | 12 | clean (4 off-path lines) |
-| 9ff35ab8 | 872 | 54 | heavily branched: 872 of 6,219 message lines on the active path |
-| fc2fbbe1 | 717 | 58 | 1,860 off-path lines |
-| f4be6b9f | ~312 | ~11 | **this session, live — still growing** |
-| bf9daec8 | 157 | 4 | |
-| 9eb444e8 / 358dd3f6 | 9 / 0 | 0 / 0 | tiny/empty |
+---
 
-I did **not** use "% of sessions with ≥1 violation" — with several checks over
-1,000-turn sessions it measures the tool's noise floor and rewards session
-length, and would say "build v2/v3" regardless of the truth. Per-100-turns is
-the honest denominator.
+## 2. The "0% false alarms" from the first pass was grading my own homework.
 
-## The tuning loop actually happened (the brief's "third outcome")
+The first report claimed 0% false alarms on these 7 sessions. But I *tuned the
+compiler against those same 7 sessions and then measured on them* — of course
+it came back clean; I'd just fixed everything it got wrong. Real precision was
+still unknown.
 
-The brief predicted the likely first-pass result: *many reports, most failing
-hand-check → the compiler is the problem, not the agents.* That is exactly what
-the raw first pass showed, and fixing it is where the real work was:
+So: **held-out validation.** Tuning was driven entirely by two sessions
+(`9ff35ab8`, `1158ee04`). I never inspected individual findings in the other
+three (`fc2fbbe1`, `bf9daec8`, `f4be6b9f`) until after the code was frozen, then
+hand-checked every finding in them cold.
 
-| False-alarm class found by hand | Fix |
-|---|---|
-| `read-before-edit` fired on files the agent had **created/edited** earlier | `require_before` accepts `Read`/`Write`/`Edit`, unbounded look-back |
-| `git commit` counted as "on main" when the command **`cd`s into another repo** | skip branch-gated checks when a command changes directory (don't guess) |
-| `grep` matched inside a **quoted search pattern / heredoc** | string-strip commands before matching (same as content) |
-| "always run `X`" produced **turn-0 citations with no evidence** | dropped from the compiler → `unsupported` (session-absence isn't turn-citable) |
+**Held-out result: 56 findings, ≈48 genuine in-repo violations, ≈8 false
+(≈86% precision).** Not 0%. Every error is the same class — a `grep`/`rm`
+running on an out-of-repo path (`/tmp`, `~/cellamind`, `Downloads`) reached via
+a shell variable or pipe that the repo-scoper can't resolve. n=7 (really n=3
+held-out) makes this weak either way, but it's honest and it cost nothing but
+restraint. The lesson generalizes: **never quote a precision number measured on
+the data you tuned against.**
 
-Only after these did the false-alarm rate reach 0%. The `git commit` one is the
-important one: the automated validator *missed* it — it took reading the actual
-commands to see they were building sandbox repos, not committing to `main`.
-That is the whole argument for hand-validation.
+---
 
-## The caveat that governs how to read this
+## 3. Command checks assume cwd == repo root. That bug is wider than branches.
 
-**None of these 7 sessions ran under this `CLAUDE.md`.** The rules were applied
-retroactively. So a "violation" here is a real, literal event that *would* have
-broken the rule *had it been in force* — it is **not** an agent knowingly
-breaking rules it was given. This corpus therefore measures **the instrument**,
-not the phenomenon:
+The first pass had a nice catch: a `git commit` inside a script that `cd`s into
+a sandbox isn't a commit to `main`. But that's one instance of a general hole —
+**any command check that assumes the working directory is the repo the rules
+govern.** The held-out data proved it: session `9ff35ab8`'s transcript lives
+under the *nugudom* project dir, but its edits landed in `~/kudzu/src` (353) and
+`~/cellamind/src` (112) — the agent wandered across repos, and the checker was
+judging kudzu edits against nugudom's rules.
 
-- ✅ **Instrument result (strong):** across 139 findings on real transcripts,
-  every one resolves to a literal event at the cited turn; 0% false alarms after
-  tuning; branch-safe numbering held on sessions with up to 5,434 off-path lines.
-  The detector works and is honest.
-- ⚠️ **Phenomenon result (not yet answerable here):** "how often do agents break
-  rules they were actually given" needs sessions that *ran under* a real rules
-  file. This machine has **zero** `CLAUDE.md` files and only 7 sessions — below
-  the brief's 10+ and none rule-governed. That number cannot be produced here.
+Fixes applied, all using recorded data rather than guesses:
 
-Two more reasons not to over-read 4.7/100:
+- **content/ordering** scoped to files under the repo root (absolute paths in
+  the transcript make this exact);
+- **commands** scoped by the recorded per-event `cwd`, and skipped when the
+  command `cd`s to a resolvable path outside the repo.
 
-1. **One stylistic rule dominates:** `rg`-not-`grep` is 100 of 139. Drop it and
-   the rate is ~1.3/100. The number is extremely sensitive to which rules you
-   pick — itself a finding worth keeping.
-2. **n = 7, from one developer, one project family.** Not a distribution.
+Effect on the total, as each scoping fix landed: **139 → 119 → 70.** The
+"violation rate" nearly halved once out-of-repo activity stopped counting. The
+number was inflated, and now it is less so.
 
-## Verdict
+**Residual, documented not hidden:** a command that never `cd`s but targets an
+out-of-repo path through a variable (`SB=/tmp/x; rm -rf "$SB"`) still evaluates.
+Resolving that needs shell-variable tracking; it's the source of the ~14%
+held-out false alarms. A design question falls out of it too: *safety* rules
+(`rm -rf`) arguably should fire everywhere, while *style/workflow* rules
+(`rg` vs `grep`) are repo-scoped — v1 scopes both.
 
-v1 is built and **validated as an instrument** (Definition of Done items 1–6:
-runs, cites turn + literal evidence, counts unsupported, generates a hand-
-editable `checks.yaml`, refuses rather than reporting zero, and was run and
-hand-checked over the real corpus). What it does **not** yet deliver is the
-go/no-go number for v2/v3, because the only sessions available weren't governed
-by a rules file. The next step is not more code — it's a corpus of sessions that
-actually ran under a `CLAUDE.md`, on which this same tool produces the real
-number.
+---
+
+## The number, stated honestly
+
+- **≈2.2 reported violations / 100 turns**, ~94% of them one trivial style rule.
+- **≈86% precision on held-out sessions** (not the in-sample 0%), all errors from
+  command-location fuzziness.
+- **These sessions never ran under this `CLAUDE.md`** — the rules were applied
+  retroactively, so this measures the instrument, not agents breaking rules they
+  were given. This machine has zero real `CLAUDE.md`-governed sessions.
+
+## What this changes about the plan
+
+The go/no-go number for v2/v3 requires sessions that *ran under* a real rules
+file. This machine can't make them and nobody else's transcripts are public, so
+the only source is **users running the tool** — which puts "ship free +
+distribute" (Part 5 steps 1–2) *before* the Part 6 number, not after.
+
+Two consequences, both acted on:
+
+1. **Stop measuring, start shipping.** More runs on this contaminated n=7 won't
+   move the answer.
+2. **The derived-signals schema is urgent now, not "before the first customer."**
+   The moment a stranger runs this and sends a number back, we must already know
+   what we're allowed to receive. See [`TELEMETRY.md`](TELEMETRY.md).
+
+Cheapest honest interim: a real `CLAUDE.md` now lives in this repo
+([`CLAUDE.md`](CLAUDE.md)); dogfood under it for a week for a real **n=1** — which
+beats the current **n=0** of rule-governed sessions.

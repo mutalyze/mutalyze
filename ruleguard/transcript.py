@@ -47,6 +47,7 @@ class ToolCall:
     timestamp: Optional[str]
     line_no: int  # 1-indexed file line — grep-verifiable
     line_id: Optional[str]  # the line's own uuid — survives renumbering
+    cwd: Optional[str]  # recorded working directory for this call (authoritative)
 
 
 @dataclass
@@ -76,6 +77,7 @@ class Transcript:
         self.path = path
         self.stats = TranscriptStats()
         self.created_paths: Set[str] = set()
+        self.session_cwd: Optional[str] = None  # most common recorded cwd
         self._main_uuids: List[str] = []
         self._turn_of: Dict[str, int] = {}
         self._main_set: Set[str] = set()
@@ -86,6 +88,7 @@ class Transcript:
     def _index_and_plan(self) -> None:
         nodes: List[_Node] = []
         by_uuid: Dict[str, _Node] = {}
+        cwd_counts: Dict[str, int] = {}
         with open(self.path, "r", encoding="utf-8", errors="replace") as fh:
             for line_no, raw in enumerate(fh, start=1):
                 raw = raw.strip()
@@ -99,6 +102,10 @@ class Transcript:
                     continue
                 if not isinstance(obj, dict):
                     continue
+
+                cwd = obj.get("cwd")
+                if isinstance(cwd, str):
+                    cwd_counts[cwd] = cwd_counts.get(cwd, 0) + 1
 
                 # created-file set (from tool results, anywhere in the file)
                 res = obj.get("toolUseResult")
@@ -146,6 +153,9 @@ class Transcript:
                 if not node.sidechain and node.etype in ("user", "assistant"):
                     key = node.uuid or ("line:%d" % node.line_no)
                     main_uuids.append(key)
+
+        if cwd_counts:
+            self.session_cwd = max(cwd_counts, key=cwd_counts.get)
 
         self._main_uuids = main_uuids
         self._main_set = set(main_uuids)
@@ -212,6 +222,7 @@ class Transcript:
                         timestamp=ts,
                         line_no=line_no,
                         line_id=obj.get("uuid"),
+                        cwd=obj.get("cwd"),
                     )
                     seq += 1
 

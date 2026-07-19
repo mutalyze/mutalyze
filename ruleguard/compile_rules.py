@@ -165,6 +165,14 @@ def _looks_like_command(span: str) -> bool:
     return bool(re.match(r"^[a-z][\w.-]*\s+(?:[a-z]|-)", span)) and first in _COMMAND_VERBS
 
 
+# Source-file extensions: a backticked `execute.py` in a rule is a *reference*
+# to a file, not a forbidden code token — forbidding it would fire on imports.
+_FILENAME_RE = re.compile(
+    r"^[\w./-]+\.(py|js|jsx|ts|tsx|go|rs|rb|java|c|cc|cpp|h|hpp|cs|md|json|ya?ml|"
+    r"toml|txt|html|css|scss|sh)$", re.IGNORECASE
+)
+
+
 def _is_code_token(span: str) -> bool:
     """A short code-like span suitable for a content forbid (not prose)."""
     span = span.strip()
@@ -172,6 +180,8 @@ def _is_code_token(span: str) -> bool:
         return False
     if _looks_like_command(span):
         return False
+    if _FILENAME_RE.match(span):
+        return False  # a filename reference, not forbidden code
     # identifier, dotted/namespaced name, decorator, or short symbol
     return bool(re.match(r"^[@#]?[\w.:<>\-\[\]/ ]+$", span)) and span.count(" ") <= 1
 

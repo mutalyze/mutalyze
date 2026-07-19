@@ -1,4 +1,4 @@
-"""new-project CLI — `new-project check`."""
+"""ruleguard CLI — `ruleguard check`."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _count_normative_lines(repo_root: str) -> int:
 
 
 def _load_or_compile(repo_root: str, recompile: bool) -> CompiledDoc:
-    checks_path = os.path.join(repo_root, ".new-project", "checks.yaml")
+    checks_path = os.path.join(repo_root, ".ruleguard", "checks.yaml")
 
     if os.path.exists(checks_path) and not recompile:
         return load_checks(checks_path)
@@ -76,7 +76,7 @@ def _guard_compilation(doc: CompiledDoc, repo_root: str) -> None:
             "ERROR  Only %d checks compiled from %s (minimum %d).\n"
             "       Not reporting a result — a low check count looks\n"
             "       identical to a compliant session.\n"
-            "       See .new-project/checks.yaml and edit by hand."
+            "       See .ruleguard/checks.yaml and edit by hand."
             % (len(doc.checks), doc.source or "the rules file", MIN_CHECKS)
         )
 
@@ -90,7 +90,7 @@ def _guard_compilation(doc: CompiledDoc, repo_root: str) -> None:
             "ERROR  This repo is mostly TypeScript/Python but zero `content`\n"
             "       checks compiled — the largest checkable category is missing.\n"
             "       The compilation is probably too shallow to trust.\n"
-            "       See .new-project/checks.yaml and edit by hand."
+            "       See .ruleguard/checks.yaml and edit by hand."
         )
 
 
@@ -109,7 +109,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             _err(
                 "ERROR  No session transcript found for this repo.\n"
                 "       Looked in: %s\n"
-                "       Pass one explicitly:  new-project check <path-to.jsonl>"
+                "       Pass one explicitly:  ruleguard check <path-to.jsonl>"
                 % project_transcript_dir(repo_root)
             )
             return 2
@@ -126,10 +126,18 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     # 3) Execute.
     transcript = Transcript(session_path)
-    violations = execute(doc.checks, transcript)
+    violations = execute(doc.checks, transcript, repo_root=repo_root)
 
     # 4) Report.
-    if args.json:
+    if args.signals:
+        import json as _json
+        from .signals import assert_clean, derive_signals
+
+        session_id = os.path.splitext(os.path.basename(session_path))[0]
+        payload = derive_signals(doc, transcript, violations, session_id)
+        assert_clean(payload, violations, doc)  # prove no raw content leaked
+        sys.stdout.write(_json.dumps(payload, indent=2) + "\n")
+    elif args.json:
         sys.stdout.write(render_json(session_path, transcript, doc, violations, rules_found) + "\n")
     else:
         sys.stdout.write(render_text(session_path, transcript, doc, violations, rules_found, args.verbose))
@@ -139,16 +147,18 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="new-project",
+        prog="ruleguard",
         description="Catch your coding agent breaking your own CLAUDE.md rules.",
     )
-    p.add_argument("--version", action="version", version="new-project %s" % __version__)
+    p.add_argument("--version", action="version", version="ruleguard %s" % __version__)
     sub = p.add_subparsers(dest="command")
 
     c = sub.add_parser("check", help="audit a session against the rules file")
     c.add_argument("session", nargs="?", help="path to a .jsonl transcript (default: newest for this repo)")
     c.add_argument("--repo", help="repo root (default: nearest .git above cwd)")
     c.add_argument("--json", action="store_true", help="machine-readable output")
+    c.add_argument("--signals", action="store_true",
+                   help="emit derived signals only (no transcript content) — the team-tier payload")
     c.add_argument("--verbose", action="store_true", help="list held and unsupported rules individually")
     c.add_argument("--recompile", action="store_true", help="re-run rule compilation, overwriting checks.yaml")
     c.set_defaults(func=cmd_check)

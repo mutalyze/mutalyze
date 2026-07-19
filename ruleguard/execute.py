@@ -49,6 +49,37 @@ def _basename(path: Optional[str]) -> str:
     return os.path.basename(path) if path else ""
 
 
+def _under(path: Optional[str], root: Optional[str]) -> bool:
+    """True if `path` is inside `root` (or we have no root to scope by).
+
+    A CLAUDE.md governs its own repo. Activity on files/commands outside that
+    repo — another checkout, a scratch dir — isn't bound by these rules, so we
+    scope to it rather than blame the agent for out-of-repo work.
+    """
+    if not root or not path:
+        return True  # nothing to scope by, or no path — don't suppress
+    root = os.path.normpath(root)
+    p = os.path.normpath(path)
+    return p == root or p.startswith(root + os.sep)
+
+
+def _cd_resolves_outside(target: str, root: Optional[str]) -> bool:
+    """True if a `cd <target>` provably lands outside the governed repo.
+
+    Absolute or ~-anchored targets are resolved and checked; relative targets
+    (`cd public`) are assumed to stay inside the repo, and unresolvable ones
+    (`cd "$DIR"`) are left to evaluate rather than guessed away.
+    """
+    if not root:
+        return False
+    t = target.strip().strip("\"'")
+    if t.startswith("~"):
+        t = os.path.expanduser(t)
+    if not os.path.isabs(t):
+        return False
+    return not _under(t, root)
+
+
 def _applies(path: Optional[str], globs: List[str]) -> bool:
     if not globs:
         return True
@@ -129,10 +160,15 @@ def _matches_after(tc: ToolCall, spec: str) -> bool:
     return tc.name == spec.strip()
 
 
-def execute(checks: List[Check], transcript: Transcript) -> List[Violation]:
+def execute(checks: List[Check], transcript: Transcript,
+            repo_root: Optional[str] = None) -> List[Violation]:
     command_checks = [c for c in checks if c.type == COMMAND]
     content_checks = [c for c in checks if c.type == CONTENT]
     ordering_checks = [c for c in checks if c.type == ORDERING]
+
+    # Scope every check to the repo the rules govern. Fall back to the session's
+    # recorded working directory when no explicit root is given.
+    root = repo_root or transcript.session_cwd
 
     # Pre-compile regexes once.
     pat_of: Dict[str, Optional[re.Pattern]] = {}
@@ -163,16 +199,19 @@ def execute(checks: List[Check], transcript: Transcript) -> List[Violation]:
         path = tc.input.get("file_path") if isinstance(tc.input.get("file_path"), str) else None
 
         # ---------- command ----------
-        if tc.name == "Bash":
-            cmd = tc.input.get("command") or ""
-            # Match against a string-stripped copy so a forbidden token that
-            # only appears inside a quoted search pattern / heredoc doesn't fire;
-            # cite the original command as evidence.
-            cmd_stripped = strip_code(cmd, "sh")
-            # A command that changes directory (or targets another repo) makes
-            # the recorded branch unreliable for its git ops — do not guess.
-            cd_away = bool(re.search(r"(?:^|[\n;&|])\s*(?:cd|pushd)\s+\S", cmd_stripped)) \
-                or "git -C" in cmd_stripped or "git --git-dir" in cmd_stripped
+        cmd = tc.input.get("command") or "" if tc.name == "Bash" else ""
+        cmd_stripped = strip_code(cmd, "sh") if cmd else ""
+        # A command that changes directory (or targets another repo) makes the
+        # recorded branch unreliable for its git ops.
+        cd_away = bool(re.search(r"(?:^|[\n;&|])\s*(?:cd|pushd)\s+\S", cmd_stripped)) \
+            or "git -C" in cmd_stripped or "git --git-dir" in cmd_stripped
+        # If the command cd's to a resolvable path OUTSIDE the repo, the whole
+        # command is operating elsewhere — don't attribute it to these rules.
+        # (Residual: a command that never cd's but targets an out-of-repo path,
+        # e.g. `rm -rf /tmp/x`, still evaluates — see FINDINGS.md limitations.)
+        cd_outside = any(_cd_resolves_outside(t, root)
+                         for t in re.findall(r"(?:^|[\n;&|])\s*(?:cd|pushd)\s+([^\s;&|]+)", cmd_stripped))
+        if tc.name == "Bash" and _under(tc.cwd, root) and not cd_outside:
             for c in command_checks:
                 if c.when_branch:
                     if tc.git_branch != c.when_branch:
@@ -192,6 +231,8 @@ def execute(checks: List[Check], transcript: Transcript) -> List[Violation]:
         # ---------- content ----------
         added = _added_text(tc, transcript.created_paths)
         for fpath, text in added:
+            if not _under(fpath, root):
+                continue  # file lives outside the governed repo
             ext = os.path.splitext(fpath or "")[1].lstrip(".")
             for c in content_checks:
                 if not (c.forbid or c.forbid_pattern):
@@ -207,7 +248,10 @@ def execute(checks: List[Check], transcript: Transcript) -> List[Violation]:
                     ))
 
         # ---------- ordering ----------
-        if ordering_checks:
+        # Only track/trigger ordering for files inside the governed repo, so a
+        # path-bearing tool call (Read/Edit/Write) on an out-of-repo file
+        # neither fires nor counts as a prior "sight" of a file.
+        if ordering_checks and (path is None or _under(path, root)):
             if max_window:  # finite window — trim; unbounded keeps full history
                 while history and history[0][0] < tc.turn - max_window:
                     history.popleft()

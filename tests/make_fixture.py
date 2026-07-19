@@ -1,4 +1,4 @@
-"""Build a labeled synthetic transcript + CLAUDE.md, then assert new-project's
+"""Build a labeled synthetic transcript + CLAUDE.md, then assert ruleguard's
 output matches the ground truth. Proves each check type fires and that the
 false-alarm guards hold. No network, no LLM."""
 
@@ -11,9 +11,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from new_project.compile_rules import compile_rules  # noqa: E402
-from new_project.execute import execute  # noqa: E402
-from new_project.transcript import Transcript  # noqa: E402
+from ruleguard.compile_rules import compile_rules  # noqa: E402
+from ruleguard.execute import execute  # noqa: E402
+from ruleguard.transcript import Transcript  # noqa: E402
 
 CLAUDE_MD = """\
 # Project rules
@@ -120,6 +120,11 @@ def build(repo):
     tb.assistant_tool("Write", {"file_path": os.path.join(repo, "e.py"),
                                 "content": "val: any = 1\n"})                             # held (update, not create)
 
+    # (FALSE-ALARM GUARD) edit a file OUTSIDE the governed repo -> must be
+    # skipped (this repo's CLAUDE.md doesn't govern another checkout).
+    tb.assistant_tool("Edit", {"file_path": "/tmp/other-repo/out.ts",
+                               "old_string": "x", "new_string": "const bad: any = {}"})    # held (out of repo)
+
     # (H) create a NEW file with `any` in it, but it's .py so the TS `any` rule's
     # applies_to (*.ts,*.tsx) should NOT match -> held.
     wid = tb.assistant_tool("Write", {"file_path": os.path.join(repo, "new.py"),
@@ -142,7 +147,7 @@ def build(repo):
 
 def main():
     import tempfile
-    repo = tempfile.mkdtemp(prefix="new-project_fix_")
+    repo = tempfile.mkdtemp(prefix="ruleguard_fix_")
     tpath = build(repo)
 
     doc = compile_rules(repo)
@@ -152,7 +157,7 @@ def main():
     print("unsupported:", [u["rule"] for u in doc.unsupported])
 
     transcript = Transcript(tpath)
-    violations = execute(doc.checks, transcript)
+    violations = execute(doc.checks, transcript, repo_root=repo)
     print("\n=== VIOLATIONS (%d) ===" % len(violations))
     for v in violations:
         print("  turn %d  %s  %s\n         %s" % (v.turn, v.check_id, v.rule, v.evidence))
@@ -186,6 +191,8 @@ def main():
         problems.append("FALSE ALARM: content check fired on b.ts (any only in comment/string)")
     if has(content, "e.py"):
         problems.append("FALSE ALARM: content check fired on e.py (Write that was an update, not create)")
+    if has(content, "out.ts") or has(ordering, "out.ts"):
+        problems.append("FALSE ALARM: fired on /tmp/other-repo/out.ts (outside the governed repo)")
     if has(content, "new.py"):
         problems.append("FALSE ALARM: content check fired on new.py (.py file, TS-only rule)")
     if has(ordering, "d.ts"):
