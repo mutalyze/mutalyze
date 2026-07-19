@@ -310,16 +310,14 @@ def _match_tool_word(text: str) -> Optional[str]:
     return None
 
 
-# Safety commands that every repo wants stopped regardless of location, so the
-# compiled check gets scope=session rather than repo.
-_DANGEROUS_RE = re.compile(
-    r"rm\s+-[rf]{1,2}|--force\b|push\s+-f\b|force[- ]push|chmod\s+777|:\(\)\s*\{", re.IGNORECASE
-)
-
-
-def _is_dangerous(check: Check) -> bool:
-    blob = " ".join(check.forbid) + " " + (check.forbid_pattern or "") + " " + check.rule
-    return bool(_DANGEROUS_RE.search(blob))
+# NOTE: scope is NEVER inferred from user prose. A compiled rule is always
+# scope=repo; only a human writing `scope: session` in checks.yaml, or an
+# authored safety-pack check, gets session scope. Guessing intent from a
+# sentence and then handing it the widest blast radius is exactly the silent
+# guess the `unresolved` bucket exists to refuse — and the dangerous behavior is
+# already covered, precisely, by the authored safety pack. A safety category the
+# pack misses is a signal to add it to the pack, not to teach the compiler to
+# guess.
 
 
 # ---------------------------------------------------------------------------
@@ -349,9 +347,7 @@ def compile_rules(repo_root: str) -> Optional[CompiledDoc]:
             if check is not None:
                 check.id = "CM%03d" % counter
                 counter += 1
-                if check.type == COMMAND and _is_dangerous(check):
-                    check.scope = "session"  # safety rule: applies everywhere
-                checks.append(check)
+                checks.append(check)  # scope stays "repo"; never inferred
             else:
                 unsupported.append({"rule": rule, "reason": reason or "unsupported"})
 

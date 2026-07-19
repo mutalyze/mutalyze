@@ -40,10 +40,15 @@ def builtin_checks() -> List[Check]:
         ),
         Check(
             id="SP003",
-            rule="Never `rm -rf` a home, root, or absolute path (or `*`).",
+            rule="Never recursively `rm -rf` a home, root, or system path (or `*`).",
             type=COMMAND,
-            # rm -rf where a target is / , ~ , $HOME , * , or an absolute path
-            forbid_pattern=r"rm\s+(?:-[a-zA-Z]+\s+)*-[rf]{1,2}[a-zA-Z]*\s+(?:-[a-zA-Z]+\s+)*(?:/\S*|~\S*|\$HOME\b|\*)",
+            # Require the RECURSIVE flag (single-file `rm -f x` is not the danger),
+            # then a target that is root/home/glob or an absolute path that is NOT
+            # a temp dir. `rm -f /tmp/x.db` and `rm -rf build/` do not match.
+            forbid_pattern=(
+                r"rm\s+(?:-[a-zA-Z]+\s+)*-[a-zA-Z]*r[a-zA-Z]*\s+(?:-[a-zA-Z]+\s+)*"
+                r"(?:/(?!(?:private/)?tmp/|var/folders/)|~|\$HOME\b|\*(?:\s|$))"
+            ),
             scope="session",
         ),
         Check(
