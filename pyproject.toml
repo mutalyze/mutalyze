@@ -9,9 +9,23 @@ description = "Catches your coding agent breaking your own CLAUDE.md rules, and 
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
-authors = [{ name = "ruleguard" }]
+authors = [{ name = "ruleguard" }]   # TODO: your name/email before first publish
 keywords = ["claude", "agent", "claude-code", "rules", "compliance", "audit"]
 dependencies = ["PyYAML>=5.4"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Utilities",
+]
+
+# TODO before publish: point these at the real repo.
+# [project.urls]
+# Homepage = "https://github.com/<you>/ruleguard"
+# Issues = "https://github.com/<you>/ruleguard/issues"
 
 [project.scripts]
 ruleguard = "ruleguard.cli:main"

@@ -117,18 +117,35 @@ payload and raises if any raw content slipped in. See
   mostly-TS/Py repo yields zero content checks — because a broken compile and a
   compliant session otherwise look identical.
 
+## Limitations — read before trusting a green run
+
+- **The safety pack's "secrets to disk" (SP004) is destination-scoped.** It fires
+  when a key-shaped string is written to a *real credential file* (`.env`,
+  `id_rsa`, `*.pem`, `credentials`, …). It does **not** fire on a secret
+  hard-coded into a source file like `config.ts` — that's the common case, and
+  ruleguard will not catch it. Content alone can't tell a real key from a test
+  fixture, so precision was chosen over coverage here. Do not read "secrets to
+  disk" as full secret-scanning; it isn't one.
+- **Checkable rules skew trivial.** The rules that are easy to check mechanically
+  (`rg` vs `grep`, dangerous commands) aren't usually the ones you care about.
+  Rules needing judgement are marked `unsupported`, counted, never guessed at.
+- **A quiet run is not a clean bill of health.** Zero findings can mean the agent
+  complied — or that your rules mostly compiled to `unsupported`, or that the
+  session didn't touch the checked surface. Read the `compiled` / `unsupported`
+  counts in the header, not just the violation count.
+- **Command location is best-effort.** A command whose directory comes from a
+  shell variable is reported `unresolved`, not violated — see the verdicts above.
+- **v1 is one harness (Claude Code) and detection only.** Drift-over-time, live
+  re-injection via hooks, and team aggregation are deliberately out until the
+  detector proves useful on real rule-governed sessions.
+
 ## Validation
 
-Run against real sessions and hand-checked. See **[FINDINGS.md](FINDINGS.md)**
-for the measured violation rate, the 0% post-tuning false-alarm rate, and the
-honest caveats.
+Run against 7 real sessions and hand-inspected. See **[FINDINGS.md](FINDINGS.md)**
+for the honest numbers, the held-out precision, and the four traps hit along the
+way (the write-up's real subject).
 
 ```bash
-./.venv/bin/python tests/make_fixture.py                       # labeled fixture: every check type + false-alarm guards
-./.venv/bin/python tests/validate_corpus.py <repo> <session>...  # hand-validation harness
+./.venv/bin/python tests/make_fixture.py       # labeled fixture: every check type + false-alarm guards
+./.venv/bin/python tests/test_safety_pack.py   # safety-pack false-positive regression guard
 ```
-
-## Scope (v1)
-
-Detection only. Drift-over-time, live rule re-injection via hooks, and team
-aggregation are deliberately out until the detector proves useful.

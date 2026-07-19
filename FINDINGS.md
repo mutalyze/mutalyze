@@ -163,6 +163,15 @@ what the unresolved bucket surfaces.
 - **These sessions never ran under this `CLAUDE.md`.** This validates the
   instrument, not agents-breaking-rules-they-were-given.
 
+**The ownership rule (why the compiler isn't hardened further before launch):**
+*what ships identically to every user must be right before launch; what varies
+per user gets fixed by user reports.* The safety pack lands the same in every
+install, so its false positives are ship-blocking and were fixed now. The
+compiler's `content` regexes run against code no one here has seen, so their
+failures arrive as feedback — which is the rule-governed corpus we're trying to
+acquire anyway. Deferring them isn't a punt; it's assigning them to their
+correct owner.
+
 Strip the `rg` rule and the corpus produces ~1 finding across 7 sessions. The
 go/no-go number for v2/v3 needs sessions that ran *under* a rules file; this
 machine has none and no public corpus exists, so the only source is users. That
@@ -177,7 +186,7 @@ The telemetry contract ([`TELEMETRY.md`](TELEMETRY.md), enforced by
 ## The real finding is the method, not the number
 
 This corpus scored down to ~1 non-trivial finding, so the violation rate isn't
-the story. The story is the instrument plus three traps — each hit, named, and
+the story. The story is the instrument plus four traps — each hit, named, and
 fixed here — that anyone building this class of tool will hit too:
 
 1. **Precision quoted off the tuning set.** The first "0% false alarms" was
@@ -191,7 +200,17 @@ fixed here — that anyone building this class of tool will hit too:
    tried to relabel those benign hits as true positives. Fix: test against
    external look-alikes, not author-written unit cases; scope by destination
    when content can't discriminate.
+4. **A null result read as validation** — the strongest, because nothing looks
+   wrong. The safety-pack sweep returned **0 hits** and that meant *nothing*:
+   the instrument was pointed at empty ground (a corpus with no relevant
+   traffic), not confirmed clean. This one has replicated across projects — a
+   diff-mutation harness once returned a false `0/19` because the transform
+   errored the suite rather than because everything was killed. Traps 1–3 are a
+   claim resting on an invisible guess; this is a *non*-claim worn as a clean
+   bill of health. Fix: before trusting a zero, prove the instrument fires on
+   ground truth (here: the external look-alikes; there: a known-live mutant).
 
-Same shape all three: a claim resting on a guess I couldn't see I was making.
-That's the honest write-up — more useful to a reader than any number this corpus
-could have produced.
+The first three are one shape — a claim resting on a guess I couldn't see I was
+making. The fourth is the negative of it, and more dangerous for looking like
+success. That's the honest write-up — more useful to a reader than any number
+this corpus could have produced.

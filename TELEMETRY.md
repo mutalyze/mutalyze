@@ -9,6 +9,20 @@ transmits **derived signals only**. This is the entire basis on which a team can
 adopt the tool, and it is structurally impossible to retrofit — a single leaky
 field in v1 poisons trust permanently. Decide it now.
 
+## Commitment: nothing leaves the machine unless you ask, every time
+
+`--signals` is a command-line flag and **only** a command-line flag. There is no
+config file, environment variable, settings default, or auto-upload that can turn
+it on — ruleguard reads no configuration surface at all, by construction. A
+default run (`ruleguard check`) computes everything locally and prints a human
+report; it transmits nothing and phones nothing home. Emitting the derived
+payload is an explicit, per-invocation choice you make by typing `--signals`.
+
+This is a promise, not a description of the current build: `--signals` will never
+become a default, and "on unless you opt out" is off the table. A tool that reads
+people's transcripts gets exactly one chance to be trusted with that, and a
+silent default would spend it.
+
 ## The only thing that may leave the machine
 
 `ruleguard check --signals` emits exactly this and nothing else:
