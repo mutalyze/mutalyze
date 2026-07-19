@@ -234,6 +234,13 @@ def main():
     if not any('bar.txt' in u.evidence for u in unresolved):
         problems.append("MISS: cd-into-$VAR grep should be in the unresolved bucket")
 
+    # phase timeline is produced, and every finding carries a valid phase label
+    _PH = {"exploring", "implementing", "debugging", "shipping", "mixed"}
+    if not result.phases:
+        problems.append("MISS: no session-shape phases produced")
+    if any(v.phase not in _PH for v in violations):
+        problems.append("BUG: a violation carries an unknown phase label")
+
     print("\n=== RESULT ===")
     if problems:
         for p in problems:

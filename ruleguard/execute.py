@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .checks import COMMAND, CONTENT, ORDERING, Check
 from .code_strip import strip_code
+from .phases import PhaseSpan, build_phases, category, phase_at
 from .transcript import Transcript, ToolCall
 
 
@@ -28,6 +29,7 @@ class Violation:
     line_no: int  # file line number — grep-verifiable
     evidence: str
     verdict: str = "violated"
+    phase: str = "mixed"  # descriptive session phase at this turn (trigger_class)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -47,6 +49,7 @@ class Unresolved:
     line_no: int
     evidence: str
     reason: str
+    phase: str = "mixed"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -56,6 +59,7 @@ class Unresolved:
 class ExecResult:
     violations: List["Violation"]
     unresolved: List["Unresolved"]
+    phases: List["PhaseSpan"] = None  # descriptive session shape (display only)
 
 
 def _trim(s: str, n: int = 100) -> str:
@@ -244,10 +248,12 @@ def execute(checks: List[Check], transcript: Transcript,
     last_turn = 0
     last_line_id: Optional[str] = None
     last_line_no = 0
+    phase_seq: List[Tuple[int, str]] = []  # (turn, activity category) for the timeline
 
     for tc in transcript.tool_calls():
         last_turn, last_line_id, last_line_no = tc.turn, tc.line_id, tc.line_no
         path = tc.input.get("file_path") if isinstance(tc.input.get("file_path"), str) else None
+        phase_seq.append((tc.turn, category(tc.name, tc.input.get("command") if tc.name == "Bash" else None)))
 
         # ---------- command ----------
         if tc.name == "Bash":
@@ -362,7 +368,15 @@ def execute(checks: List[Check], transcript: Transcript,
 
     violations.sort(key=lambda v: v.turn)
     unresolved.sort(key=lambda u: u.turn)
-    return ExecResult(violations=violations, unresolved=unresolved)
+
+    # Descriptive phase timeline — attached to each finding as trigger_class,
+    # rendered in the report. Never used to decide any verdict above.
+    spans = build_phases(phase_seq)
+    for v in violations:
+        v.phase = phase_at(spans, v.turn)
+    for u in unresolved:
+        u.phase = phase_at(spans, u.turn)
+    return ExecResult(violations=violations, unresolved=unresolved, phases=spans)
 
 
 def _has_before(history, check: Check, trigger_turn: int, trigger_path: Optional[str]) -> bool:

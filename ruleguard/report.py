@@ -41,6 +41,16 @@ def render_text(
         lines.append("Path:    main path numbered; " + ", ".join(extra) + " kept but not numbered")
     lines.append("")
 
+    # Descriptive session shape — narrates a quiet run; never gates a check.
+    spans = result.phases or []
+    if spans:
+        lines.append("SESSION SHAPE  (tool-call phases — descriptive, never gates a check)")
+        for sp in spans:
+            rng = ("turn %d" % sp.start_turn) if sp.start_turn == sp.end_turn \
+                else ("turns %d–%d" % (sp.start_turn, sp.end_turn))
+            lines.append("  %-16s %s" % (rng, sp.phase))
+        lines.append("")
+
     violated_ids = {v.check_id for v in violations}
 
     if violations:
@@ -110,6 +120,7 @@ def render_json(
             "unsupported": len(doc.unsupported),
             "source": doc.source,
         },
+        "phases": [sp.to_dict() for sp in (result.phases or [])],
         "violations": [v.to_dict() for v in violations],
         "unresolved": [u.to_dict() for u in result.unresolved],
         "held": [c.id for c in doc.checks if c.id not in violated_ids],

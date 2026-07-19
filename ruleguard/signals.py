@@ -49,16 +49,17 @@ def _uid(text: str, salt: str = "ruleguard/v1") -> str:
 
 def derive_signals(doc: CompiledDoc, transcript: Transcript,
                    result: ExecResult, session_id: str) -> Dict:
-    by_check: Dict[str, List[int]] = {}
+    by_check: Dict[str, List] = {}
     for v in result.violations:
-        by_check.setdefault(v.check_id, []).append(v.turn)
+        by_check.setdefault(v.check_id, []).append((v.turn, v.phase))
     unresolved_by_check: Dict[str, List[int]] = {}
     for u in result.unresolved:
         unresolved_by_check.setdefault(u.check_id, []).append(u.turn)
 
     rules = []
     for c in doc.checks:
-        turns = sorted(by_check.get(c.id, []))
+        tv = sorted(by_check.get(c.id, []))
+        turns = [t for t, _ in tv]
         unres = sorted(unresolved_by_check.get(c.id, []))
         rules.append({
             "rule_uid": _uid(_norm(c.rule)),
@@ -67,6 +68,9 @@ def derive_signals(doc: CompiledDoc, transcript: Transcript,
             "verdict": "violated" if turns else ("unresolved" if unres else "held"),
             "violations": len(turns),
             "turns": turns,
+            # trigger_class: the session phase each violation fired in (from tool
+            # names only; a fixed vocabulary, never transcript content).
+            "trigger_class": [p for _, p in tv],
             "unresolved": len(unres),
         })
 
@@ -93,16 +97,22 @@ def assert_clean(payload: Dict, result: ExecResult, doc: CompiledDoc) -> None:
     """
     import json
 
+    # ruleguard's OWN schema vocabulary is allowed to appear in the payload —
+    # only genuine transcript content leaking is a failure.
+    allow = {"command", "content", "ordering", "repo", "session", "violated",
+             "held", "unresolved", "exploring", "implementing", "debugging",
+             "shipping", "mixed"}
+
     blob = json.dumps(payload)
     leaked = []
     for v in list(result.violations) + list(result.unresolved):
         for chunk in (v.evidence, v.rule):
             for tok in chunk.split():
-                if len(tok) >= 6 and tok in blob:
+                if len(tok) >= 6 and tok.lower() not in allow and tok in blob:
                     leaked.append(tok)
     for c in doc.checks:
         for tok in c.rule.split():
-            if len(tok) >= 6 and tok in blob:
+            if len(tok) >= 6 and tok.lower() not in allow and tok in blob:
                 leaked.append(tok)
     if leaked:
         raise AssertionError(
