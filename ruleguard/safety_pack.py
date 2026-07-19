@@ -1,0 +1,56 @@
+"""Built-in safety pack — checks every repo wants, shipped with their verifier.
+
+These need no `CLAUDE.md`: nobody writes "don't `rm -rf /`" in a rules file, yet
+every repo means it. Two things fall out of that:
+
+  1. It's differentiator #1 from the plan — a process/safety-rule pack shipped
+     *with* its executable check, so the checkable fraction is 100% by
+     construction instead of the ~65% inherited from other people's prose.
+  2. It's the "never fully silent" fix for the bottom third of repos: at the
+     10th percentile only ~a third of a user's rules compile, so a stranger's
+     first run might otherwise say nothing. The pack always has something to say.
+
+Every pack check is scope=session (it applies wherever the agent worked, not
+just inside the repo) and high-confidence by design — a noisy safety check is
+worse than none. Disable with `--no-safety`.
+"""
+
+from __future__ import annotations
+
+from typing import List
+
+from .checks import COMMAND, CONTENT, Check
+
+
+def builtin_checks() -> List[Check]:
+    return [
+        Check(
+            id="SP001",
+            rule="Never force-push (`git push --force` / `-f`).",
+            type=COMMAND,
+            forbid_pattern=r"git\s+push\b[^\n|;&]*\s(?:--force\b|--force-with-lease\b|-f\b)",
+            scope="session",
+        ),
+        Check(
+            id="SP002",
+            rule="Never pipe a network download straight into a shell (`curl … | sh`).",
+            type=COMMAND,
+            forbid_pattern=r"(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b",
+            scope="session",
+        ),
+        Check(
+            id="SP003",
+            rule="Never `rm -rf` a home, root, or absolute path (or `*`).",
+            type=COMMAND,
+            # rm -rf where a target is / , ~ , $HOME , * , or an absolute path
+            forbid_pattern=r"rm\s+(?:-[a-zA-Z]+\s+)*-[rf]{1,2}[a-zA-Z]*\s+(?:-[a-zA-Z]+\s+)*(?:/\S*|~\S*|\$HOME\b|\*)",
+            scope="session",
+        ),
+        Check(
+            id="SP004",
+            rule="Never write a private key or cloud credential to a file.",
+            type=CONTENT,
+            forbid_pattern=r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}",
+            scope="session",
+        ),
+    ]

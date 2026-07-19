@@ -18,6 +18,7 @@ from .discover import (
 )
 from .execute import execute
 from .report import render_json, render_text
+from .safety_pack import builtin_checks
 from .transcript import Transcript
 
 MIN_CHECKS = 5
@@ -68,15 +69,16 @@ def _load_or_compile(repo_root: str, recompile: bool) -> CompiledDoc:
     return doc
 
 
-def _guard_compilation(doc: CompiledDoc, repo_root: str) -> None:
-    """Refuse rather than report zero — a bad compile looks identical to a
-    compliant session."""
+def _guard_compilation(doc: CompiledDoc, repo_root: str) -> Optional[str]:
+    """Return a loud warning when a rules file compiled too thinly to trust — a
+    bad compile otherwise looks identical to a compliant session. With the
+    safety pack running underneath we warn rather than exit, so we're never
+    fully silent; the warning still prints above the report."""
     if len(doc.checks) < MIN_CHECKS:
-        raise Refuse(
-            "ERROR  Only %d checks compiled from %s (minimum %d).\n"
-            "       Not reporting a result — a low check count looks\n"
-            "       identical to a compliant session.\n"
-            "       See .ruleguard/checks.yaml and edit by hand."
+        return (
+            "WARNING  Only %d checks compiled from %s (below %d). A low check\n"
+            "         count looks like a compliant session — treat user-rule\n"
+            "         results as thin and edit .ruleguard/checks.yaml by hand."
             % (len(doc.checks), doc.source or "the rules file", MIN_CHECKS)
         )
 
@@ -86,12 +88,12 @@ def _guard_compilation(doc: CompiledDoc, repo_root: str) -> None:
         "ts", "tsx", "js", "jsx", "py", "rs", "go", "java", "rb", "c", "cpp", "php"))
     content_checks = sum(1 for c in doc.checks if c.type == CONTENT)
     if total_code >= 10 and ts_py >= 0.5 * max(total_code, 1) and content_checks == 0:
-        raise Refuse(
-            "ERROR  This repo is mostly TypeScript/Python but zero `content`\n"
-            "       checks compiled — the largest checkable category is missing.\n"
-            "       The compilation is probably too shallow to trust.\n"
-            "       See .ruleguard/checks.yaml and edit by hand."
+        return (
+            "WARNING  This repo is mostly TypeScript/Python but zero `content`\n"
+            "         checks compiled — the largest checkable category is missing.\n"
+            "         Edit .ruleguard/checks.yaml by hand."
         )
+    return None
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -114,19 +116,28 @@ def cmd_check(args: argparse.Namespace) -> int:
             )
             return 2
 
-    # 2) Compile (or load cached) checks, with refuse-rather-than-zero guards.
+    # 2) Compile user rules (may be absent) + load the built-in safety pack.
+    pack = [] if args.no_safety else builtin_checks()
+    warning = None
     try:
         doc = _load_or_compile(repo_root, args.recompile)
-        _guard_compilation(doc, repo_root)
+        warning = _guard_compilation(doc, repo_root)
     except Refuse as r:
-        _err(str(r))
-        return 3
+        # No rules file. The safety pack still runs — never fully silent — unless
+        # it's disabled, in which case there is genuinely nothing to check.
+        if not pack:
+            _err(str(r))
+            return 3
+        warning = "NOTE  No CLAUDE.md/AGENTS.md found — running the built-in safety pack only."
+        doc = CompiledDoc(source="(none)", checks=[], unsupported=[])
 
+    all_checks = doc.checks + pack
+    combined = CompiledDoc(source=doc.source, checks=all_checks, unsupported=doc.unsupported)
     rules_found = _count_normative_lines(repo_root)
 
     # 3) Execute.
     transcript = Transcript(session_path)
-    violations = execute(doc.checks, transcript, repo_root=repo_root)
+    result = execute(all_checks, transcript, repo_root=repo_root)
 
     # 4) Report.
     if args.signals:
@@ -134,15 +145,18 @@ def cmd_check(args: argparse.Namespace) -> int:
         from .signals import assert_clean, derive_signals
 
         session_id = os.path.splitext(os.path.basename(session_path))[0]
-        payload = derive_signals(doc, transcript, violations, session_id)
-        assert_clean(payload, violations, doc)  # prove no raw content leaked
+        payload = derive_signals(combined, transcript, result, session_id)
+        assert_clean(payload, result, combined)  # prove no raw content leaked
         sys.stdout.write(_json.dumps(payload, indent=2) + "\n")
-    elif args.json:
-        sys.stdout.write(render_json(session_path, transcript, doc, violations, rules_found) + "\n")
     else:
-        sys.stdout.write(render_text(session_path, transcript, doc, violations, rules_found, args.verbose))
+        if warning:
+            _err(warning)
+        if args.json:
+            sys.stdout.write(render_json(session_path, transcript, combined, result, rules_found) + "\n")
+        else:
+            sys.stdout.write(render_text(session_path, transcript, combined, result, rules_found, args.verbose))
 
-    return 1 if violations else 0
+    return 1 if result.violations else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -161,6 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="emit derived signals only (no transcript content) — the team-tier payload")
     c.add_argument("--verbose", action="store_true", help="list held and unsupported rules individually")
     c.add_argument("--recompile", action="store_true", help="re-run rule compilation, overwriting checks.yaml")
+    c.add_argument("--no-safety", action="store_true", help="disable the built-in safety pack")
     c.set_defaults(func=cmd_check)
     return p
 

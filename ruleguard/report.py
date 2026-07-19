@@ -6,8 +6,8 @@ import json
 import os
 from typing import List
 
-from .checks import Check, CompiledDoc
-from .execute import Violation
+from .checks import CompiledDoc
+from .execute import ExecResult
 from .transcript import Transcript, duration_human
 
 
@@ -19,16 +19,18 @@ def render_text(
     session_path: str,
     transcript: Transcript,
     doc: CompiledDoc,
-    violations: List[Violation],
+    result: ExecResult,
     rules_found: int,
     verbose: bool = False,
 ) -> str:
     st = transcript.stats
+    violations = result.violations
+    unresolved = result.unresolved
     sid = _session_id(session_path)
     lines: List[str] = []
     lines.append("")
     lines.append("Session: %s  (%s turns, %s)" % (sid[:8], f"{st.turns:,}", duration_human(st)))
-    lines.append("Rules:   %d found · %d compiled · %d unsupported"
+    lines.append("Rules:   %d found · %d checks (incl. safety pack) · %d unsupported"
                  % (rules_found, len(doc.checks), len(doc.unsupported)))
     if st.side_branch_lines or st.sidechain_lines:
         extra = []
@@ -49,7 +51,15 @@ def render_text(
             lines.append("  %s %s" % (" " * 13, v.evidence))
             lines.append("")
     else:
-        lines.append("VIOLATIONS (0) — every compiled check held.")
+        lines.append("VIOLATIONS (0) — every check held.")
+        lines.append("")
+
+    # The third bucket: findings we can't stand behind, never silently dropped.
+    if unresolved:
+        lines.append("UNRESOLVED (%d — could not locate the command; may or may not apply)" % len(unresolved))
+        for u in unresolved:
+            lines.append("  turn %-6d %-6s %s" % (u.turn, u.check_id, u.rule))
+            lines.append("  %s %s" % (" " * 13, u.evidence))
         lines.append("")
 
     held = [c for c in doc.checks if c.id not in violated_ids]
@@ -76,10 +86,11 @@ def render_json(
     session_path: str,
     transcript: Transcript,
     doc: CompiledDoc,
-    violations: List[Violation],
+    result: ExecResult,
     rules_found: int,
 ) -> str:
     st = transcript.stats
+    violations = result.violations
     violated_ids = {v.check_id for v in violations}
     out = {
         "session": _session_id(session_path),
@@ -100,14 +111,16 @@ def render_json(
             "source": doc.source,
         },
         "violations": [v.to_dict() for v in violations],
+        "unresolved": [u.to_dict() for u in result.unresolved],
         "held": [c.id for c in doc.checks if c.id not in violated_ids],
         "unsupported": doc.unsupported,
-        # headline metrics (Part 6): reported here as *reported*, before hand-validation.
+        # headline metrics (Part 6): reported as *reported*, before hand-validation.
         "metrics": {
             "reported_violations": len(violations),
             "reported_violations_per_100_turns": round(
                 (len(violations) / st.turns * 100) if st.turns else 0.0, 3
             ),
+            "unresolved": len(result.unresolved),
             "rules_broken_at_least_once": len(violated_ids),
             "rules_compiled": len(doc.checks),
         },

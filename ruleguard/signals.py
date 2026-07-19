@@ -33,7 +33,7 @@ import hashlib
 from typing import Dict, List
 
 from .checks import CompiledDoc
-from .execute import Violation
+from .execute import ExecResult
 from .transcript import Transcript
 
 SCHEMA_VERSION = 1
@@ -48,20 +48,26 @@ def _uid(text: str, salt: str = "ruleguard/v1") -> str:
 
 
 def derive_signals(doc: CompiledDoc, transcript: Transcript,
-                   violations: List[Violation], session_id: str) -> Dict:
+                   result: ExecResult, session_id: str) -> Dict:
     by_check: Dict[str, List[int]] = {}
-    for v in violations:
+    for v in result.violations:
         by_check.setdefault(v.check_id, []).append(v.turn)
+    unresolved_by_check: Dict[str, List[int]] = {}
+    for u in result.unresolved:
+        unresolved_by_check.setdefault(u.check_id, []).append(u.turn)
 
     rules = []
     for c in doc.checks:
         turns = sorted(by_check.get(c.id, []))
+        unres = sorted(unresolved_by_check.get(c.id, []))
         rules.append({
             "rule_uid": _uid(_norm(c.rule)),
             "rule_type": c.type,
-            "verdict": "violated" if turns else "held",
+            "scope": c.scope,
+            "verdict": "violated" if turns else ("unresolved" if unres else "held"),
             "violations": len(turns),
             "turns": turns,
+            "unresolved": len(unres),
         })
 
     st = transcript.stats
@@ -78,7 +84,7 @@ def derive_signals(doc: CompiledDoc, transcript: Transcript,
     }
 
 
-def assert_clean(payload: Dict, violations: List[Violation], doc: CompiledDoc) -> None:
+def assert_clean(payload: Dict, result: ExecResult, doc: CompiledDoc) -> None:
     """Fail loudly if any raw content leaked into the derived payload.
 
     Checks the serialized payload against every evidence string, rule text, and
@@ -89,7 +95,7 @@ def assert_clean(payload: Dict, violations: List[Violation], doc: CompiledDoc) -
 
     blob = json.dumps(payload)
     leaked = []
-    for v in violations:
+    for v in list(result.violations) + list(result.unresolved):
         for chunk in (v.evidence, v.rule):
             for tok in chunk.split():
                 if len(tok) >= 6 and tok in blob:

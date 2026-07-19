@@ -62,7 +62,7 @@ def main():
     agg_viol = 0
     for spath in sessions:
         t = Transcript(spath)
-        viols = execute(doc.checks, t)
+        viols = execute(doc.checks, t).violations
         agg_turns += t.stats.turns
         agg_viol += len(viols)
         print("\nSESSION %s" % os.path.basename(spath))

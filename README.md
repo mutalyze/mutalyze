@@ -70,6 +70,34 @@ the transcript once and evaluates every check. Every violation carries
 | `content` | `Write` / `Edit` / `MultiEdit` payloads | "No `console.log`" |
 | `ordering` | sequence of tool calls | "Read a file before editing it" |
 
+### Three verdicts, not two
+
+A finding is `violated`, `held`, or **`unresolved`** — the last for a command
+whose working directory was built from a shell variable (`cd "$D" && grep …`),
+so we can't tell if it ran in the governed repo. Unresolved findings are neither
+claimed nor dropped: they're reported apart, and you can still open the turn.
+A violation always rests on evidence you can stand behind.
+
+### Scope: repo vs session
+
+Each rule has a `scope` in `checks.yaml`. `repo` (default) counts only inside
+the governed repo — right for style rules like `rg` vs `grep`. `session` applies
+wherever the agent worked — right for safety rules. Hand-editable.
+
+### Built-in safety pack
+
+Ships with checks no rules file bothers to write but every repo wants —
+force-push, `curl | sh`, `rm -rf` of a home/root path, secrets written to disk —
+all `session`-scoped and high-confidence. It runs even with no `CLAUDE.md`
+(so a first run is never fully silent). Disable with `--no-safety`.
+
+### Team tier: derived signals only
+
+`ruleguard check --signals` emits hashes, categories, counts, and turn integers
+— never a command, path, or rule text. A leak-guard re-checks the serialized
+payload and raises if any raw content slipped in. See
+[TELEMETRY.md](TELEMETRY.md).
+
 ### The hard parts it handles
 
 - **Branch-safe turns.** Transcripts are trees (rewinds/edited prompts branch;

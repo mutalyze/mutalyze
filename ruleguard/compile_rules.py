@@ -310,6 +310,18 @@ def _match_tool_word(text: str) -> Optional[str]:
     return None
 
 
+# Safety commands that every repo wants stopped regardless of location, so the
+# compiled check gets scope=session rather than repo.
+_DANGEROUS_RE = re.compile(
+    r"rm\s+-[rf]{1,2}|--force\b|push\s+-f\b|force[- ]push|chmod\s+777|:\(\)\s*\{", re.IGNORECASE
+)
+
+
+def _is_dangerous(check: Check) -> bool:
+    blob = " ".join(check.forbid) + " " + (check.forbid_pattern or "") + " " + check.rule
+    return bool(_DANGEROUS_RE.search(blob))
+
+
 # ---------------------------------------------------------------------------
 # Top-level compile
 # ---------------------------------------------------------------------------
@@ -337,6 +349,8 @@ def compile_rules(repo_root: str) -> Optional[CompiledDoc]:
             if check is not None:
                 check.id = "CM%03d" % counter
                 counter += 1
+                if check.type == COMMAND and _is_dangerous(check):
+                    check.scope = "session"  # safety rule: applies everywhere
                 checks.append(check)
             else:
                 unsupported.append({"rule": rule, "reason": reason or "unsupported"})

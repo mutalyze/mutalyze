@@ -33,6 +33,31 @@ class Violation:
         return asdict(self)
 
 
+@dataclass
+class Unresolved:
+    """A finding we cannot stand behind: the forbidden token is present, but the
+    command's location was built from a shell variable so we can't tell whether
+    it ran inside the governed repo. Neither violated nor held — reported apart,
+    and the user can still open the turn and look."""
+
+    check_id: str
+    rule: str
+    turn: int
+    line_id: Optional[str]
+    line_no: int
+    evidence: str
+    reason: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class ExecResult:
+    violations: List["Violation"]
+    unresolved: List["Unresolved"]
+
+
 def _trim(s: str, n: int = 100) -> str:
     s = " ".join(s.split())
     return s if len(s) <= n else s[: n - 1] + "…"
@@ -61,6 +86,31 @@ def _under(path: Optional[str], root: Optional[str]) -> bool:
     root = os.path.normpath(root)
     p = os.path.normpath(path)
     return p == root or p.startswith(root + os.sep)
+
+
+def _command_location(cmd_stripped: str, tc_cwd: Optional[str], root: Optional[str]) -> str:
+    """Where did this command actually run, relative to the governed repo?
+
+    Returns "in_repo", "out_repo", or "unresolved". Location is the invocation
+    directory (recorded cwd, adjusted by a resolvable `cd`), NOT what the command
+    happens to touch — invoking `grep` in the repo breaks a "use rg" rule even if
+    it greps a /tmp file. A `cd` into a shell variable is unresolved: we don't
+    guess, and we don't silently drop it either.
+    """
+    if not root:
+        return "in_repo"  # nothing to scope by — evaluate
+    cds = re.findall(r"(?:^|[\n;&|])\s*(?:cd|pushd)\s+([^\s;&|]+)", cmd_stripped)
+    resolvable = []
+    for t in cds:
+        t = t.strip().strip("\"'")
+        if t == "-" or "$" in t or "`" in t:
+            return "unresolved"
+        resolvable.append(t)
+    if any(_cd_resolves_outside(t, root) for t in resolvable):
+        return "out_repo"
+    if tc_cwd is None:
+        return "unresolved"
+    return "in_repo" if _under(tc_cwd, root) else "out_repo"
 
 
 def _cd_resolves_outside(target: str, root: Optional[str]) -> bool:
@@ -161,7 +211,7 @@ def _matches_after(tc: ToolCall, spec: str) -> bool:
 
 
 def execute(checks: List[Check], transcript: Transcript,
-            repo_root: Optional[str] = None) -> List[Violation]:
+            repo_root: Optional[str] = None) -> ExecResult:
     command_checks = [c for c in checks if c.type == COMMAND]
     content_checks = [c for c in checks if c.type == CONTENT]
     ordering_checks = [c for c in checks if c.type == ORDERING]
@@ -176,6 +226,7 @@ def execute(checks: List[Check], transcript: Transcript,
         pat_of[c.id] = _safe_regex(c.forbid_pattern) if c.forbid_pattern else None
 
     violations: List[Violation] = []
+    unresolved: List[Unresolved] = []
 
     # command: require_present is a session-level check.
     present_met = {c.id: False for c in command_checks if c.require_present}
@@ -199,19 +250,15 @@ def execute(checks: List[Check], transcript: Transcript,
         path = tc.input.get("file_path") if isinstance(tc.input.get("file_path"), str) else None
 
         # ---------- command ----------
-        cmd = tc.input.get("command") or "" if tc.name == "Bash" else ""
-        cmd_stripped = strip_code(cmd, "sh") if cmd else ""
-        # A command that changes directory (or targets another repo) makes the
-        # recorded branch unreliable for its git ops.
-        cd_away = bool(re.search(r"(?:^|[\n;&|])\s*(?:cd|pushd)\s+\S", cmd_stripped)) \
-            or "git -C" in cmd_stripped or "git --git-dir" in cmd_stripped
-        # If the command cd's to a resolvable path OUTSIDE the repo, the whole
-        # command is operating elsewhere — don't attribute it to these rules.
-        # (Residual: a command that never cd's but targets an out-of-repo path,
-        # e.g. `rm -rf /tmp/x`, still evaluates — see FINDINGS.md limitations.)
-        cd_outside = any(_cd_resolves_outside(t, root)
-                         for t in re.findall(r"(?:^|[\n;&|])\s*(?:cd|pushd)\s+([^\s;&|]+)", cmd_stripped))
-        if tc.name == "Bash" and _under(tc.cwd, root) and not cd_outside:
+        if tc.name == "Bash":
+            cmd = tc.input.get("command") or ""
+            cmd_stripped = strip_code(cmd, "sh")
+            # Any cd makes the recorded branch unreliable for git ops.
+            cd_away = bool(re.search(r"(?:^|[\n;&|])\s*(?:cd|pushd)\s+\S", cmd_stripped)) \
+                or "git -C" in cmd_stripped or "git --git-dir" in cmd_stripped
+            # location detection reads the RAW command: string-stripping would
+            # blank a "$VAR" inside quotes and hide that it's unresolvable.
+            location = _command_location(cmd, tc.cwd, root)  # in_repo|out_repo|unresolved
             for c in command_checks:
                 if c.when_branch:
                     if tc.git_branch != c.when_branch:
@@ -221,10 +268,21 @@ def execute(checks: List[Check], transcript: Transcript,
                 if c.forbid or c.forbid_pattern:
                     hit = _command_forbid_hit(cmd_stripped, c, pat_of[c.id])
                     if hit:
-                        violations.append(Violation(
-                            c.id, c.rule, c.type, tc.turn, tc.line_id, tc.line_no,
-                            "Bash → %s" % _trim(cmd),
-                        ))
+                        # scope=session: applies everywhere. scope=repo: only if
+                        # invoked in-repo; unresolved location -> the third bucket.
+                        if c.scope == "session" or location == "in_repo":
+                            violations.append(Violation(
+                                c.id, c.rule, c.type, tc.turn, tc.line_id, tc.line_no,
+                                "Bash → %s" % _trim(cmd),
+                            ))
+                        elif location == "unresolved":
+                            unresolved.append(Unresolved(
+                                c.id, c.rule, tc.turn, tc.line_id, tc.line_no,
+                                "Bash → %s" % _trim(cmd),
+                                "command location built from a shell variable — may or may not be in-repo",
+                            ))
+                        # location == "out_repo": rule is about this repo, work
+                        # happened elsewhere -> not applicable.
                 if c.require_present and c.require_present in cmd:
                     present_met[c.id] = True
 
@@ -289,7 +347,7 @@ def execute(checks: List[Check], transcript: Transcript,
             ))
 
     for c in ordering_checks:
-        if c.require_after and c.scope == "session_end":
+        if c.require_after:  # "require_after" is session-end by construction
             st = after_state.get(c.id)
             if st and not st["satisfied"]:
                 violations.append(Violation(
@@ -298,7 +356,8 @@ def execute(checks: List[Check], transcript: Transcript,
                 ))
 
     violations.sort(key=lambda v: v.turn)
-    return violations
+    unresolved.sort(key=lambda u: u.turn)
+    return ExecResult(violations=violations, unresolved=unresolved)
 
 
 def _has_before(history, check: Check, trigger_turn: int, trigger_path: Optional[str]) -> bool:

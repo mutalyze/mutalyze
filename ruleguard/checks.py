@@ -37,6 +37,12 @@ class Check:
     # command only: only evaluate when the current git branch equals this
     when_branch: Optional[str] = None
 
+    # scope answers "is this rule about this repo?" — NOT "can I resolve the
+    # path?" (that's the unresolved bucket). "repo" (default): only counts for
+    # activity inside the governed repo. "session": applies everywhere the agent
+    # worked — for safety rules (`rm -rf`, force push) that every repo wants.
+    scope: str = "repo"
+
     # content only: shell globs (matched against the file's basename); empty
     # means "applies to every Write/Edit".
     applies_to: List[str] = field(default_factory=list)
@@ -44,15 +50,14 @@ class Check:
     # ordering only. A `trigger` tool call must be accompanied by either:
     #   - a `require_before` tool call within `within_turns` prior turns
     #     (optionally on the `same_path`), or
-    #   - a `require_after` action later in the session. When `scope` is
-    #     "session_end", it must follow the LAST trigger.
+    #   - a `require_after` action later in the session (session-end by
+    #     construction: it must follow the LAST trigger).
     # require_after may be a bare tool name ("Bash") or "Bash: <substr>".
     trigger: Optional[str] = None
     require_before: Optional[str] = None
     require_after: Optional[str] = None
     same_path: bool = False
     within_turns: int = 50
-    scope: Optional[str] = None
 
     def to_yaml_obj(self) -> Dict[str, Any]:
         out: Dict[str, Any] = {"id": self.id, "rule": self.rule, "type": self.type}
@@ -66,6 +71,8 @@ class Check:
             out["require_present"] = self.require_present
         if self.when_branch:
             out["when_branch"] = self.when_branch
+        if self.scope and self.scope != "repo":
+            out["scope"] = self.scope
         if self.applies_to:
             out["applies_to"] = self.applies_to
         if self.trigger:
@@ -78,8 +85,6 @@ class Check:
             out["same_path"] = self.same_path
         if self.type == ORDERING and self.require_before and self.within_turns != 50:
             out["within_turns"] = self.within_turns
-        if self.scope:
-            out["scope"] = self.scope
         return out
 
 
@@ -123,13 +128,13 @@ def load_checks(path: str) -> CompiledDoc:
                 require_instead=raw.get("require_instead"),
                 require_present=raw.get("require_present"),
                 when_branch=raw.get("when_branch"),
+                scope=str(raw.get("scope", "repo") or "repo"),
                 applies_to=list(raw.get("applies_to", []) or []),
                 trigger=raw.get("trigger"),
                 require_before=raw.get("require_before"),
                 require_after=raw.get("require_after"),
                 same_path=bool(raw.get("same_path", False)),
                 within_turns=int(raw.get("within_turns", 50) if raw.get("within_turns") is not None else 50),
-                scope=raw.get("scope"),
             )
         )
     unsupported = [

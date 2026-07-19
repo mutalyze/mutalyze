@@ -23,6 +23,7 @@ CLAUDE_MD = """\
 - No `any` types in TypeScript.
 - Never use `console.log`.
 - Read a file before editing it.
+- Use `rg` (not `grep`) for searching.
 - Always run `npm test` before finishing.
 - Write clean, maintainable code.
 - Prefer descriptive variable names.
@@ -32,18 +33,22 @@ CLAUDE_MD = """\
 class TB:
     """Builds a JSONL transcript with a valid parent chain and gitBranch."""
 
-    def __init__(self, branch="feature/x"):
+    def __init__(self, branch="feature/x", cwd=None):
         self.lines = []
         self.parent = None
         self.n = 0
         self.branch = branch
+        self.cwd = cwd  # recorded working directory (real transcripts always have it)
 
     def _base(self, uuid, etype):
-        return {
+        base = {
             "uuid": uuid, "parentUuid": self.parent, "type": etype,
             "gitBranch": self.branch, "timestamp": "2026-07-19T10:%02d:00.000Z" % (self.n % 60),
             "sessionId": "test",
         }
+        if self.cwd:
+            base["cwd"] = self.cwd
+        return base
 
     def assistant_tool(self, name, tool_input):
         self.n += 1
@@ -88,7 +93,7 @@ def build(repo):
         with open(os.path.join(repo, name), "w", encoding="utf-8") as fh:
             fh.write("export const x = 1\n")
 
-    tb = TB(branch="feature/x")
+    tb = TB(branch="feature/x", cwd=repo)
 
     # (V) forbidden command: cargo test
     tb.assistant_tool("Bash", {"command": "cargo test --lib"})           # VIOLATION cargo nextest
@@ -138,7 +143,14 @@ def build(repo):
     tb.set_branch("feature/x")
     tb.assistant_tool("Bash", {"command": "git commit -m 'ok here'"})                     # held (not main)
 
-    # NOTE: `npm test` is never run -> require_present VIOLATION at session end
+    # (V) grep in-repo -> violates "use rg not grep" (invoked in the repo)
+    tb.assistant_tool("Bash", {"command": "grep -n foo %s" % os.path.join(repo, "a.ts")})   # VIOLATION rg-not-grep
+    # (UNRESOLVED) grep after cd into a shell variable -> location unknown
+    tb.assistant_tool("Bash", {"command": 'cd "$SANDBOX" && grep -n foo bar.txt'})           # UNRESOLVED
+    # (V, pack) force-push -> SP001, session-scoped (fires regardless of location)
+    tb.assistant_tool("Bash", {"command": "git push --force origin main"})                    # VIOLATION SP001
+    # (V, pack) rm -rf a home path -> SP003, session-scoped
+    tb.assistant_tool("Bash", {"command": "rm -rf ~/.cache/junk"})                            # VIOLATION SP003
 
     tpath = os.path.join(repo, "session.jsonl")
     tb.dump(tpath)
@@ -156,8 +168,15 @@ def main():
         print(" ", c.id, c.type, "|", c.rule)
     print("unsupported:", [u["rule"] for u in doc.unsupported])
 
+    from ruleguard.safety_pack import builtin_checks
+
     transcript = Transcript(tpath)
-    violations = execute(doc.checks, transcript, repo_root=repo)
+    result = execute(doc.checks + builtin_checks(), transcript, repo_root=repo)
+    violations = result.violations
+    unresolved = result.unresolved
+    print("\n=== UNRESOLVED (%d) ===" % len(unresolved))
+    for u in unresolved:
+        print("  turn %d  %s  %s" % (u.turn, u.check_id, u.evidence))
     print("\n=== VIOLATIONS (%d) ===" % len(violations))
     for v in violations:
         print("  turn %d  %s  %s\n         %s" % (v.turn, v.check_id, v.rule, v.evidence))
@@ -201,6 +220,19 @@ def main():
         problems.append("FALSE ALARM: flagged the sanctioned `cargo nextest run`")
     if any("ok here" in v.evidence for v in command):
         problems.append("FALSE ALARM: flagged a commit on a non-main branch")
+
+    # New: scope, unresolved bucket, safety pack
+    if not has(command, "grep -n foo"):
+        problems.append("MISS: in-repo grep not flagged (rg-not-grep, invoked in repo)")
+    if not any("SP001" == u for u in [v.check_id for v in violations]):
+        problems.append("MISS: SP001 force-push (safety pack) not flagged")
+    if not any("SP003" == v.check_id for v in violations):
+        problems.append("MISS: SP003 rm -rf home path (safety pack, session-scoped) not flagged")
+    # the cd-into-$VAR grep must be UNRESOLVED, not a violation and not dropped
+    if any('bar.txt' in v.evidence for v in violations):
+        problems.append("FALSE ALARM: cd-into-$VAR grep reported as a violation (should be unresolved)")
+    if not any('bar.txt' in u.evidence for u in unresolved):
+        problems.append("MISS: cd-into-$VAR grep should be in the unresolved bucket")
 
     print("\n=== RESULT ===")
     if problems:

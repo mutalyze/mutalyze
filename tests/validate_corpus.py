@@ -129,7 +129,7 @@ def main():
 
     for spath in sessions:
         t = Transcript(spath)
-        viols = execute(doc.checks, t)
+        viols = execute(doc.checks, t).violations
         for v in viols:
             verdict, why = classify(check_by_id, t, spath, v)
             totals[verdict] += 1
