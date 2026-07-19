@@ -1,0 +1,11 @@
+<svg width="96" height="96" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ruleguard fox mark">
+  <!-- left plane: charcoal -->
+  <path d="M6 9 L17.2 20 L24 17 L24 43 L8 29 Z" fill="#313d37"/>
+  <!-- right plane: sage -->
+  <path d="M24 17 L30.8 20 L42 9 L40 29 L24 43 Z" fill="#7d9c82"/>
+  <!-- centre seam -->
+  <path d="M24 17 V43" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- eyes (negative) -->
+  <path d="M14.6 24 L18.4 25.5 L15 27 Z" fill="#ffffff"/>
+  <path d="M33.4 24 L29.6 25.5 L33 27 Z" fill="#ffffff"/>
+</svg>
