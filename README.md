@@ -2,13 +2,38 @@
 
 **Catches your coding agent breaking your own `CLAUDE.md` rules, and tells you which rule and at which turn.**
 
-Every repo using an AI coding agent has a rules file (`CLAUDE.md` / `AGENTS.md`).
-The agent follows it at first, then over a long session quietly stops. Nothing
-errors. Nobody checks. ruleguard reads your rules file and one session
-transcript and reports exactly which rules were broken, at which turn, with the
-literal evidence — so you can open the transcript and see it yourself.
+Coding agents now run for long, largely unattended stretches, and the only record
+of what one actually did is the session log it writes to disk. Your rules live in
+one file (`CLAUDE.md` / `AGENTS.md`); the record of the agent's behaviour lives in
+another. **ruleguard checks one against the other** — it reads your rules and one
+session transcript and reports exactly which rules were broken, at which turn,
+with the command or line that proves it.
 
-**No LLM judges a violation.** Every finding is a deterministic, citable fact.
+**No LLM judges a violation.** Every finding is a deterministic fact you can open
+the transcript and see for yourself.
+
+### Integration, not invention
+
+This is not a new method — it's the assembly that was missing. The problem is
+well-documented and the pieces are already published: tools that lint your rules
+file, tools that read session transcripts, and research on step-wise verifiers
+that score a trajectory against externally-checkable rules. What no one ships is
+any of it as **one thing you install and point at a real repo.** The adjacent
+tools each stop short of the join:
+
+- **Rules-file linters / packs** (agnix, ctxlint, rule packs) check that your
+  rules file is well-formed, or hand you rules — they never look at a session.
+- **Transcript tools** (viewers, cost dashboards) read the session for cost,
+  search, or to *generate* rules — never to check the rules were followed.
+- **SpecLock** does enforce rules, but at the diff / proposed-action layer (a
+  pre-commit hook plus a "check before acting" MCP tool). Its evidence is a diff
+  or a proposed action; ruleguard's is a turn in the session that actually ran.
+- **sessionaudit** scans transcripts for dangerous commands and secrets — close
+  to ruleguard's built-in safety pack, worth knowing about.
+
+ruleguard's slot is the one nobody occupies: join the rules file to the real
+session transcript and return **per-turn evidence, deterministically, from one
+install.** The claim is integration, not novelty.
 
 ```
 $ ruleguard check
@@ -150,6 +175,33 @@ payload and raises if any raw content slipped in. See
   report) when no rules file resolves, fewer than 5 checks compile, or a
   mostly-TS/Py repo yields zero content checks — because a broken compile and a
   compliant session otherwise look identical.
+
+## Cost
+
+Execute consumes **zero tokens** — it's plain parsing, no model, no network.
+Compile runs once per rules-file change, on *your* own API key (never routed
+through a server), and is cheap. An LLM-judge approach pays per session, every
+session, and the cost grows with session length — a judge can't cache, because
+every transcript is new.
+
+| approach | per session |
+|---|---|
+| **ruleguard** | **$0** (one-time compile ≈ $0.02 on Haiku 4.5) |
+| LLM judge · Sonnet-class · 300K-token session | ~$0.60 |
+| LLM judge · Opus 4.8 | ~$1.50 |
+| LLM judge · Fable 5 | ~$3.00 |
+
+*(Judge figures are order-of-magnitude estimates for one full-session pass.)*
+
+## It reads what the agent can't
+
+Claude Code writes an append-only JSONL transcript that is **never compacted**.
+The agent's own context is finite (~830K usable tokens in Claude Code after the
+auto-compaction buffer) and subject to context rot — recall degrades worst for
+low-salience text near the *start* of the window, which is exactly where
+`CLAUDE.md` sits. ruleguard reads the **full** session the agent itself can no
+longer see. A verifier subagent, by contrast, inherits the same rot it is meant
+to detect.
 
 ## Limitations — read before trusting a green run
 
