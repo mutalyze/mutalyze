@@ -1,4 +1,4 @@
-"""Build a labeled synthetic transcript + CLAUDE.md, then assert ruleguard's
+"""Build a labeled synthetic transcript + CLAUDE.md, then assert mutalyze's
 output matches the ground truth. Proves each check type fires and that the
 false-alarm guards hold. No network, no LLM."""
 
@@ -11,9 +11,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from ruleguard.compile_rules import compile_rules  # noqa: E402
-from ruleguard.execute import execute  # noqa: E402
-from ruleguard.transcript import Transcript  # noqa: E402
+from mutalyze.compile_rules import compile_rules  # noqa: E402
+from mutalyze.execute import execute  # noqa: E402
+from mutalyze.transcript import Transcript  # noqa: E402
 
 CLAUDE_MD = """\
 # Project rules
@@ -168,7 +168,7 @@ def main():
         print(" ", c.id, c.type, "|", c.rule)
     print("unsupported:", [u["rule"] for u in doc.unsupported])
 
-    from ruleguard.safety_pack import builtin_checks
+    from mutalyze.safety_pack import builtin_checks
 
     transcript = Transcript(tpath)
     result = execute(doc.checks + builtin_checks(), transcript, repo_root=repo)

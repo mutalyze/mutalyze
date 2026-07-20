@@ -133,6 +133,13 @@ _NEG_RE = re.compile(
 )
 _RUN_RE = re.compile(r"\b(always|must|ensure|run|execute)\b", re.IGNORECASE)
 
+_CONDITION_RE = re.compile(r"\b(without|unless|except|when not|if not)\b", re.IGNORECASE)
+
+# Tokens that live in code comments (TODO, FIXME, …). Content matching strips
+# comments FIRST, so a rule forbidding one can never fire — compiling it would be
+# a null that reads as "held". Refuse instead of emitting a check that lies.
+_COMMENT_MARKERS = {"TODO", "FIXME", "XXX", "HACK", "WIP", "BUG", "NOTE", "OPTIMIZE", "TEMP"}
+
 # Language / extension mentions -> file globs for content `applies_to`.
 _LANG_GLOBS = {
     "typescript": ["*.ts", "*.tsx"], "ts": ["*.ts", "*.tsx"], "tsx": ["*.tsx"],
@@ -182,8 +189,14 @@ def _is_code_token(span: str) -> bool:
         return False
     if _FILENAME_RE.match(span):
         return False  # a filename reference, not forbidden code
-    # identifier, dotted/namespaced name, decorator, or short symbol
-    return bool(re.match(r"^[@#]?[\w.:<>\-\[\]/ ]+$", span)) and span.count(" ") <= 1
+    if span.endswith("/"):
+        return False  # a directory/location (e.g. `mutalyze/`), not a code token
+    # identifier, dotted/namespaced name, call, decorator, or short symbol.
+    # Parens are allowed so a function call like `print()` is recognized as the
+    # forbidden token — without them it was skipped, and a co-occurring path span
+    # ("No `print()` in `mutalyze/`") got forbidden instead, firing on any line
+    # that merely mentioned the path.
+    return bool(re.match(r"^[@#]?[\w.:<>()\-\[\]/ ]+$", span)) and span.count(" ") <= 1
 
 
 def _globs_for(low: str) -> List[str]:
@@ -191,6 +204,21 @@ def _globs_for(low: str) -> List[str]:
         if re.search(r"\b" + re.escape(word) + r"\b", low):
             return list(globs)
     return []
+
+
+# A location scope a rule names for a content rule: "... in `mutalyze/`",
+# "under `/app/legacy/`", "inside `src/`". The forbidden token comes first and
+# is skipped; this captures the *place*.
+_SCOPE_RE = re.compile(r"\b(?:in|under|inside|within)\b[^`]*`([^`]+)`", re.I)
+
+
+def _dir_globs(span: str) -> List[str]:
+    """A directory span -> a repo-relative glob. `mutalyze/` -> `mutalyze/*`;
+    `/app/legacy/` -> `app/legacy/*`. Matched against the repo-relative path in
+    execute._applies, so it scopes to that subtree without baking an absolute,
+    machine-specific path into the (shareable, hand-editable) checks.yaml."""
+    d = span.strip().strip("/")
+    return [d + "/*"] if d else []
 
 
 def _content_pattern(token: str) -> Tuple[Optional[str], List[str]]:
@@ -201,6 +229,15 @@ def _content_pattern(token: str) -> Tuple[Optional[str], List[str]]:
     """
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
         return r"\b" + re.escape(token) + r"\b", []
+    # A function-call token — `print()`, `console.log()` — means "any call to it".
+    # Compile to `\bname\(` so it matches real calls WITH arguments (print("x")),
+    # not just the empty-paren literal `print()`. A rule that can only match
+    # `print()` reports HELD against code full of `print(x)` — a null that reads
+    # as a pass. `\b` keeps it from matching `sprint(`/`fingerprint(`; comment and
+    # string stripping handles the rest.
+    m = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_.]*)\(\)", token)
+    if m:
+        return r"\b" + re.escape(m.group(1)) + r"\(", []
     return None, [token]
 
 
@@ -213,6 +250,15 @@ def classify(rule: str) -> Tuple[Optional[Check], Optional[str]]:
     low = rule.lower()
     spans = _BACKTICK_RE.findall(rule)
     negative = bool(_NEG_RE.search(rule))
+
+    # A rule conditioned on something we can't verify ("... without a venv",
+    # "... unless reviewed", "... except in tests") must NOT become a blanket
+    # forbid — that over-fires on the allowed case. Refuse rather than cry wolf.
+    cond = _CONDITION_RE.search(rule)
+    if negative and cond:
+        return (None, "conditional on \"%s\" — not machine-checkable; a blanket check would "
+                      "over-fire, so it's unsupported. Set it up in .mutalyze/checks.yaml by hand"
+                      % cond.group(1).lower())
 
     # 1) git branch-protection: "never commit/push directly to main"
     if negative and re.search(r"\b(main|master)\b", low):
@@ -229,17 +275,23 @@ def classify(rule: str) -> Tuple[Optional[Check], Optional[str]]:
                 None,
             )
 
-    # 2) "use `X` (not `Y`)" / "`Y` instead" — forbidden command + alternative
-    m_not = re.search(r"(?:not|instead of|rather than|don't use|never use|avoid)\s+`([^`]+)`", rule, re.IGNORECASE)
-    m_use = re.search(r"(?:use|prefer|run)\s+`([^`]+)`", rule, re.IGNORECASE)
-    if m_not and _looks_like_command(m_not.group(1)):
-        instead = None
-        if m_use and _looks_like_command(m_use.group(1)) and m_use.group(1) != m_not.group(1):
-            instead = m_use.group(1).strip()
-        return (
-            Check(id="", rule=rule, type=COMMAND, forbid=[m_not.group(1).strip()], require_instead=instead),
-            None,
-        )
+    # 2) "use `X` (not `Y`)" / "prefer `X` over `Y`" / "`Y` instead" — forbid Y,
+    #    the REJECTED alternative, never X the sanctioned one. Y counts as a
+    #    command if it looks like one OR if X does: "use `pytest`, not `unittest`"
+    #    makes `unittest` a peer tool even though it isn't in the verb list.
+    #    Getting this backwards forbids the very tool the user was told to use.
+    m_not = re.search(r"(?:not|instead of|rather than|don't use|never use|avoid|over)\s+`([^`]+)`", rule, re.IGNORECASE)
+    m_use = re.search(r"(?:use|prefer|run|switch to)\s+`([^`]+)`", rule, re.IGNORECASE)
+    if m_not:
+        y = m_not.group(1).strip()
+        x = m_use.group(1).strip() if m_use else None
+        y_token = bool(re.fullmatch(r"[\w.\-/]+", y))
+        if _looks_like_command(y) or (x and x != y and _looks_like_command(x) and y_token):
+            return (
+                Check(id="", rule=rule, type=COMMAND, forbid=[y],
+                      require_instead=(x if x and x != y else None)),
+                None,
+            )
 
     # 3) generic forbidden command: "never run `X`" / "avoid `X`"
     if negative:
@@ -272,16 +324,40 @@ def classify(rule: str) -> Tuple[Optional[Check], Optional[str]]:
                 None,
             )
 
-    # 5) content: forbidden code token in written output
+    # 5) content: forbidden code token in written output, optionally scoped to a
+    #    directory the rule names ("... in `mutalyze/`"). Dropping that scope
+    #    turns "no print() in mutalyze/" into "no print() anywhere" — a check
+    #    that flags tests/ while the rule plainly says otherwise, wrong in a way
+    #    anyone spots at a glance. So honor the scope when it's an unambiguous
+    #    directory path, and REFUSE (mark unsupported — counted and listed) when
+    #    it isn't, rather than silently widen it. Refuse-rather-than-report,
+    #    applied to compilation.
     if negative:
+        scope_m = _SCOPE_RE.search(rule)
+        scope_span = scope_m.group(1).strip() if scope_m else None
         for span in spans:
-            if _is_code_token(span):
-                pat, literals = _content_pattern(span.strip())
+            s = span.strip()
+            if s == scope_span:
+                continue  # the location, not the forbidden token
+            if _is_code_token(s):
+                if s.upper() in _COMMENT_MARKERS or re.search(r"\bcomments?\b", low):
+                    return (None, "targets code comments, which are stripped before content "
+                                  "matching — not checkable without a comment-aware mode")
+                pat, literals = _content_pattern(s)
+                if scope_span:
+                    if "/" in scope_span:
+                        applies = _dir_globs(scope_span)  # unambiguous directory — honor it
+                    else:
+                        return (None, "rule scopes to `%s` but that isn't an unambiguous "
+                                      "directory path; scope not honored — set applies_to in "
+                                      ".mutalyze/checks.yaml by hand" % scope_span)
+                else:
+                    applies = _globs_for(low)
                 return (
                     Check(
                         id="", rule=rule, type=CONTENT,
                         forbid=literals, forbid_pattern=pat,
-                        applies_to=_globs_for(low),
+                        applies_to=applies,
                     ),
                     None,
                 )

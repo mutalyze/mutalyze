@@ -1,4 +1,4 @@
-"""ruleguard CLI — `ruleguard check`."""
+"""mutalyze CLI — `mutalyze check`."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def _count_normative_lines(repo_root: str) -> int:
 
 
 def _load_or_compile(repo_root: str, recompile: bool) -> CompiledDoc:
-    checks_path = os.path.join(repo_root, ".ruleguard", "checks.yaml")
+    checks_path = os.path.join(repo_root, ".mutalyze", "checks.yaml")
 
     if os.path.exists(checks_path) and not recompile:
         return load_checks(checks_path)
@@ -78,7 +78,7 @@ def _guard_compilation(doc: CompiledDoc, repo_root: str) -> Optional[str]:
         return (
             "WARNING  Only %d checks compiled from %s (below %d). A low check\n"
             "         count looks like a compliant session — treat user-rule\n"
-            "         results as thin and edit .ruleguard/checks.yaml by hand."
+            "         results as thin and edit .mutalyze/checks.yaml by hand."
             % (len(doc.checks), doc.source or "the rules file", MIN_CHECKS)
         )
 
@@ -91,7 +91,7 @@ def _guard_compilation(doc: CompiledDoc, repo_root: str) -> Optional[str]:
         return (
             "WARNING  This repo is mostly TypeScript/Python but zero `content`\n"
             "         checks compiled — the largest checkable category is missing.\n"
-            "         Edit .ruleguard/checks.yaml by hand."
+            "         Edit .mutalyze/checks.yaml by hand."
         )
     return None
 
@@ -111,7 +111,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             _err(
                 "ERROR  No session transcript found for this repo.\n"
                 "       Looked in: %s\n"
-                "       Pass one explicitly:  ruleguard check <path-to.jsonl>"
+                "       Pass one explicitly:  mutalyze check <path-to.jsonl>"
                 % project_transcript_dir(repo_root)
             )
             return 2
@@ -159,12 +159,66 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 1 if result.violations else 0
 
 
+def _prepare_checks(repo_root: str, args: argparse.Namespace):
+    """Compile user rules + load the safety pack, or refuse loudly. Shared by
+    check and watch so both obey 'refuse rather than report zero'. Returns
+    (all_checks, combined_doc, rules_found, warning)."""
+    pack = [] if getattr(args, "no_safety", False) else builtin_checks()
+    try:
+        doc = _load_or_compile(repo_root, getattr(args, "recompile", False))
+        warning = _guard_compilation(doc, repo_root)
+    except Refuse as r:
+        if not pack:
+            raise
+        warning = "NOTE  No CLAUDE.md/AGENTS.md found — running the built-in safety pack only."
+        doc = CompiledDoc(source="(none)", checks=[], unsupported=[])
+    all_checks = doc.checks + pack
+    combined = CompiledDoc(source=doc.source, checks=all_checks, unsupported=doc.unsupported)
+    return all_checks, combined, _count_normative_lines(repo_root), warning
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    import tempfile
+
+    from .discover import project_transcript_dir
+    from .watch import _Ink, Watcher
+
+    repo_root = os.path.abspath(args.repo) if args.repo else find_repo_root(os.getcwd())
+    try:
+        all_checks, combined, rules_found, warning = _prepare_checks(repo_root, args)
+    except Refuse as r:
+        _err(str(r))
+        return 3
+    if warning:
+        _err(warning)
+
+    ink = _Ink(on=sys.stdout.isatty() and not args.no_color)
+    watcher = Watcher(repo_root, all_checks, combined, rules_found, ink)
+
+    if args.replay:
+        if not os.path.exists(args.replay):
+            _err("ERROR  Replay file not found: %s" % args.replay)
+            return 2
+        fd, dst = tempfile.mkstemp(prefix="ruleguard_watch_", suffix=".jsonl")
+        os.close(fd)
+        try:
+            return watcher.run_replay(args.replay, dst, speed=args.speed, split_lines=args.split_lines)
+        finally:
+            try:
+                os.unlink(dst)
+            except OSError:
+                pass
+
+    tdir = os.path.dirname(args.session) if args.session else project_transcript_dir(repo_root)
+    return watcher.run_live(tdir, args.session)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="ruleguard",
+        prog="mutalyze",
         description="Catch your coding agent breaking your own CLAUDE.md rules.",
     )
-    p.add_argument("--version", action="version", version="ruleguard %s" % __version__)
+    p.add_argument("--version", action="version", version="mutalyze %s" % __version__)
     sub = p.add_subparsers(dest="command")
 
     c = sub.add_parser("check", help="audit a session against the rules file")
@@ -177,6 +231,20 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--recompile", action="store_true", help="re-run rule compilation, overwriting checks.yaml")
     c.add_argument("--no-safety", action="store_true", help="disable the built-in safety pack")
     c.set_defaults(func=cmd_check)
+
+    w = sub.add_parser("watch", help="follow a live session and report violations as they happen")
+    w.add_argument("session", nargs="?", help="a specific .jsonl to follow (default: newest for this repo)")
+    w.add_argument("--repo", help="repo root (default: nearest .git above cwd)")
+    w.add_argument("--no-safety", action="store_true", help="disable the built-in safety pack")
+    w.add_argument("--recompile", action="store_true", help="re-run rule compilation, overwriting checks.yaml")
+    w.add_argument("--no-color", action="store_true", help="disable ANSI color")
+    w.add_argument("--replay", metavar="FILE",
+                   help="replay a recorded .jsonl instead of a live session (test/demo)")
+    w.add_argument("--speed", type=float, default=0.0,
+                   help="replay: seconds to pause between lines (0 = as fast as possible)")
+    w.add_argument("--split-lines", action="store_true",
+                   help="replay: write some lines in two writes, to exercise partial-line handling")
+    w.set_defaults(func=cmd_watch)
     return p
 
 

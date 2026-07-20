@@ -17,6 +17,15 @@ Schema notes (observed by dumping real transcripts, NOT assumed):
   - Write/Edit tool *results* live on a following ``user`` line under
     ``toolUseResult``; ``toolUseResult.type == "create"`` marks a Write that
     created a new file (vs ``"update"``).
+  - **Compaction resets the parent chain.** When context is auto-compacted, a
+    ``type == "system"`` line with ``subtype == "compact_boundary"`` is written
+    with ``parentUuid == null`` — the pointer chain is deliberately cut — and
+    the real link to the pre-compaction turn is moved to a *separate*
+    ``logicalParentUuid`` field. Post-compaction messages parent onto the
+    boundary node. So a naive parentUuid walk stops dead at the last boundary
+    and orphans the ENTIRE session before it (on a real 2460-line session that
+    was 95% of it, invisible to every check). We bridge the cut via
+    ``logicalParentUuid`` so one logical session stays one main path.
 
 Turn numbering: we trace the main path via parent pointers, number turns along
 that path only, and keep each line's own ``uuid`` (line_id) plus file line
@@ -70,6 +79,7 @@ class _Node:
     parent: Optional[str]
     etype: Optional[str]
     sidechain: bool
+    logical_parent: Optional[str] = None  # logicalParentUuid — set on compaction boundaries
 
 
 class Transcript:
@@ -120,6 +130,7 @@ class Transcript:
                     parent=obj.get("parentUuid"),
                     etype=obj.get("type"),
                     sidechain=bool(obj.get("isSidechain")),
+                    logical_parent=obj.get("logicalParentUuid"),
                 )
                 nodes.append(node)
                 if node.uuid:
@@ -142,7 +153,15 @@ class Transcript:
             while cur is not None and cur.uuid and cur.uuid not in seen:
                 seen.add(cur.uuid)
                 main_uuids.append(cur.uuid)
-                cur = by_uuid.get(cur.parent) if cur.parent else None
+                nxt = by_uuid.get(cur.parent) if cur.parent else None
+                # Bridge a compaction boundary: its parentUuid is null by design,
+                # but logicalParentUuid still points at the pre-compaction turn.
+                # Without this the walk stops here and drops the whole session
+                # before the last compaction. Only fires when the ordinary parent
+                # dead-ends, so it never reroutes a genuine rewind sibling.
+                if nxt is None and cur.logical_parent:
+                    nxt = by_uuid.get(cur.logical_parent)
+                cur = nxt
             main_uuids.reverse()
 
         if not main_uuids:

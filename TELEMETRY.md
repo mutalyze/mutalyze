@@ -13,8 +13,8 @@ field in v1 poisons trust permanently. Decide it now.
 
 `--signals` is a command-line flag and **only** a command-line flag. There is no
 config file, environment variable, settings default, or auto-upload that can turn
-it on — ruleguard reads no configuration surface at all, by construction. A
-default run (`ruleguard check`) computes everything locally and prints a human
+it on — mutalyze reads no configuration surface at all, by construction. A
+default run (`mutalyze check`) computes everything locally and prints a human
 report; it transmits nothing and phones nothing home. Emitting the derived
 payload is an explicit, per-invocation choice you make by typing `--signals`.
 
@@ -25,7 +25,7 @@ silent default would spend it.
 
 ## The only thing that may leave the machine
 
-`ruleguard check --signals` emits exactly this and nothing else:
+`mutalyze check --signals` emits exactly this and nothing else:
 
 ```json
 {
@@ -55,13 +55,13 @@ contents · uuids · anything free-text from the transcript.
 
 ## Enforcement, not promise
 
-`ruleguard/signals.py` is the single function that builds the payload, and
+`mutalyze/signals.py` is the single function that builds the payload, and
 `assert_clean()` re-checks the serialized result against every evidence string
 and rule text and **raises if any token leaked**. The CLI calls it on every
 `--signals` run before printing. The guarantee is executed, not documented.
 
 ```
-$ ruleguard check --signals | grep -iE 'grep|/Users/|console|cargo'
+$ mutalyze check --signals | grep -iE 'grep|/Users/|console|cargo'
 clean — no raw content in payload
 ```
 

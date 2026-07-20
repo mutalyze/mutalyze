@@ -85,7 +85,7 @@ def render_text(
         lines.append("")
     else:
         lines.append("HELD (%d rules, no violations)" % len(held))
-        lines.append("UNSUPPORTED (%d rules — see .ruleguard/checks.yaml, or --verbose)"
+        lines.append("UNSUPPORTED (%d rules — see .mutalyze/checks.yaml, or --verbose)"
                      % len(doc.unsupported))
         lines.append("")
 

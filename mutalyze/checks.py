@@ -1,4 +1,4 @@
-"""The compiled-check data model and the .ruleguard/checks.yaml (de)serializer.
+"""The compiled-check data model and the .mutalyze/checks.yaml (de)serializer.
 
 A Check is the executable form of one natural-language rule. checks.yaml is
 written to be human-readable and hand-editable — a user correcting a bad
@@ -110,7 +110,7 @@ class CompiledDoc:
         if self.unsupported:
             doc["unsupported"] = self.unsupported
         header = (
-            "# ruleguard compiled checks — generated from your rules file.\n"
+            "# mutalyze compiled checks — generated from your rules file.\n"
             "# This file is meant to be edited. Fix a bad rule, delete a noisy\n"
             "# one, or move a rule between `checks` and `unsupported` by hand.\n"
         )

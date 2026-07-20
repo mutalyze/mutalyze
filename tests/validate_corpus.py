@@ -21,11 +21,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ruleguard.checks import COMMAND, CONTENT, ORDERING  # noqa: E402
-from ruleguard.code_strip import strip_code  # noqa: E402
-from ruleguard.compile_rules import compile_rules  # noqa: E402
-from ruleguard.execute import execute  # noqa: E402
-from ruleguard.transcript import Transcript  # noqa: E402
+from mutalyze.checks import COMMAND, CONTENT, ORDERING  # noqa: E402
+from mutalyze.code_strip import strip_code  # noqa: E402
+from mutalyze.compile_rules import compile_rules  # noqa: E402
+from mutalyze.execute import execute  # noqa: E402
+from mutalyze.transcript import Transcript  # noqa: E402
 
 
 def raw_obj(path, line_no):

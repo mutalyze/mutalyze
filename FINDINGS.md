@@ -1,6 +1,6 @@
 # Findings
 
-ruleguard over the 7 real Claude Code sessions on this machine, with a
+mutalyze over the 7 real Claude Code sessions on this machine, with a
 representative `CLAUDE.md` plus the built-in safety pack. Every finding
 hand-inspected.
 
@@ -214,3 +214,30 @@ The first three are one shape — a claim resting on a guess I couldn't see I wa
 making. The fourth is the negative of it, and more dangerous for looking like
 success. That's the honest write-up — more useful to a reader than any number
 this corpus could have produced.
+
+## First real-data application (n=1, pre-launch verification)
+
+Every number above is from synthetic, tuned, or safety-pack-only corpora. The
+pre-upload verification produced the first application of the instrument to a
+**real, human-authored `CLAUDE.md`** (mutalyze's own dogfood rules — 10 rules,
+10 checks incl. safety pack, 4 unsupported) against a **real 1,941-turn
+session** (3.2h+ of actual work, spanning a compaction boundary the parser now
+bridges). Result:
+
+- **3 `CM002` violations** (read-before-edit, no shell evidence for the path),
+- **4 unresolved** (edits to heredoc-authored files — evidence present but not
+  cleanly adjudicable),
+- **`CM004` held** (the `print()`-in-`mutalyze/` rule now scopes to the
+  package and found no debug prints there; the test-harness prints it used to
+  flag are correctly out of scope),
+- 4 rules unsupported, counted and named.
+
+**Caveat — this is not clean dogfood.** The transcript is a session in which
+mutalyze work happened, not one governed end-to-end by mutalyze's `CLAUDE.md`.
+So it is *real rules × real session*, not *a session that ran under the rules*.
+The clean n=1 still requires working a full session under the rules file and
+checking that. But it is a different kind of number than anything above:
+produced from inputs neither authored nor tuned for the test — which is exactly
+the condition the four traps are about. Notably, the three fixes shipped during
+this run (dropped `()`, heredoc author, dropped `Y/`) were all found *because*
+real inputs exercised rule shapes the synthetic fixtures didn't.

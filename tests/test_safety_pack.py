@@ -17,8 +17,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ruleguard.code_strip import strip_code  # noqa: E402
-from ruleguard.safety_pack import builtin_checks  # noqa: E402
+from mutalyze.code_strip import strip_code  # noqa: E402
+from mutalyze.safety_pack import builtin_checks  # noqa: E402
 
 PACK = {c.id: c for c in builtin_checks()}
 
@@ -85,7 +85,21 @@ def main():
         for cid, what, exp in fails:
             print("FAIL %s expect=%s  %r" % (cid, exp, what))
         sys.exit(1)
-    print("safety pack self-check PASS (%d cases)" % (len(COMMAND_CASES) + len(SP004_CASES)))
+    print("safety pack negative-direction PASS (%d look-alike cases)"
+          % (len(COMMAND_CASES) + len(SP004_CASES)))
+
+    # Both directions are one suite: the positive-detection guard (does the
+    # alarm fire on real smoke?) runs here too, so a future edit can't silence a
+    # rule any more than it can widen one. See test_safety_positive.py.
+    from test_safety_positive import run as run_positive
+
+    problems, n = run_positive()
+    if problems:
+        for p in problems:
+            print("FAIL:", p)
+        sys.exit(1)
+    print("safety pack positive-direction PASS (%d dangerous events fired at the right "
+          "turn with correct evidence)" % n)
 
 
 if __name__ == "__main__":

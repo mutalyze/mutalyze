@@ -134,7 +134,7 @@ def _cd_resolves_outside(target: str, root: Optional[str]) -> bool:
     return not _under(t, root)
 
 
-def _applies(path: Optional[str], globs: List[str]) -> bool:
+def _applies(path: Optional[str], globs: List[str], root: Optional[str] = None) -> bool:
     if not globs:
         return True
     if not path:
@@ -142,7 +142,24 @@ def _applies(path: Optional[str], globs: List[str]) -> bool:
     import fnmatch
 
     base = os.path.basename(path)
-    return any(fnmatch.fnmatch(base, g) or fnmatch.fnmatch(path, g) for g in globs)
+    # A directory-scope glob ("mutalyze/*") is matched against the repo-relative
+    # path, so it scopes to that subtree and does NOT collide with a repo that
+    # happens to share the directory's name (every file under ~/mutalyze has
+    # "mutalyze/" in its absolute path — relative matching avoids that).
+    rel = None
+    if root:
+        try:
+            r = os.path.relpath(os.path.normpath(path), os.path.normpath(root))
+        except ValueError:
+            r = None
+        if r and not r.startswith(".."):  # only when the file is under the repo
+            rel = r
+    for g in globs:
+        if fnmatch.fnmatch(base, g) or fnmatch.fnmatch(path, g):
+            return True
+        if rel is not None and fnmatch.fnmatch(rel, g):
+            return True
+    return False
 
 
 def _added_text(tc: ToolCall, created_paths) -> List[Tuple[Optional[str], str]]:
@@ -245,6 +262,13 @@ def execute(checks: List[Check], transcript: Transcript,
     # ordering: require_after (scope session_end) — track the last open trigger.
     after_state: Dict[str, dict] = {}
 
+    # ordering: raw Bash commands seen so far, to spot files the agent authored
+    # via a heredoc/redirect (`cat > x.py`, a python heredoc that opens 'x.py').
+    # Such a file has no Read/Write/Edit tool call to credit, but writing it IS
+    # seeing it — so a later Edit isn't "edited blind". We can't cleanly
+    # adjudicate that, so it goes to `unresolved`, not `violated`.
+    prior_bash: List[str] = []
+
     last_turn = 0
     last_line_id: Optional[str] = None
     last_line_no = 0
@@ -258,6 +282,7 @@ def execute(checks: List[Check], transcript: Transcript,
         # ---------- command ----------
         if tc.name == "Bash":
             cmd = tc.input.get("command") or ""
+            prior_bash.append(cmd)  # raw: a heredoc-authored path lives in the body
             cmd_stripped = strip_code(cmd, "sh")
             # Any cd makes the recorded branch unreliable for git ops.
             cd_away = bool(re.search(r"(?:^|[\n;&|])\s*(?:cd|pushd)\s+\S", cmd_stripped)) \
@@ -304,7 +329,7 @@ def execute(checks: List[Check], transcript: Transcript,
                 # secret-to-disk check) fire wherever the file was written.
                 if c.scope != "session" and not in_repo:
                     continue
-                if not _applies(fpath, c.applies_to):
+                if not _applies(fpath, c.applies_to, root):
                     continue
                 if fpath and any(x in fpath for x in c.exclude_paths):
                     continue  # example / test / fixture / doc path — benign by destination
@@ -329,12 +354,24 @@ def execute(checks: List[Check], transcript: Transcript,
                 # require_before: this trigger must have a prior `require_before`
                 if c.require_before and tc.name == c.trigger:
                     if not _has_before(history, c, tc.turn, path):
-                        tail = " of the same file" if c.same_path else ""
-                        violations.append(Violation(
-                            c.id, c.rule, c.type, tc.turn, tc.line_id, tc.line_no,
-                            "%s → %s with no preceding %s%s within %d turns"
-                            % (tc.name, _basename(path) or "(no path)", c.require_before, tail, c.within_turns),
-                        ))
+                        base = _basename(path)
+                        if base and any(base in bc for bc in prior_bash):
+                            # authored/touched by an earlier shell command — can't
+                            # cleanly call this "edited without reading".
+                            unresolved.append(Unresolved(
+                                c.id, c.rule, tc.turn, tc.line_id, tc.line_no,
+                                "%s → %s" % (tc.name, base),
+                                "no preceding Read/Write/Edit, but '%s' appears in an earlier shell "
+                                "command — likely authored via a heredoc/redirect, so it was not "
+                                "edited sight-unseen" % base,
+                            ))
+                        else:
+                            tail = " of the same file" if c.same_path else ""
+                            violations.append(Violation(
+                                c.id, c.rule, c.type, tc.turn, tc.line_id, tc.line_no,
+                                "%s → %s with no preceding %s%s within %d turns"
+                                % (tc.name, base or "(no path)", c.require_before, tail, c.within_turns),
+                            ))
                 # require_after: remember the latest trigger; satisfy on later match
                 if c.require_after:
                     if tc.name == c.trigger:

@@ -1,4 +1,4 @@
-"""Run ruleguard over a set of real sessions and, for every reported
+"""Run mutalyze over a set of real sessions and, for every reported
 violation, print the raw transcript line at the cited line so each one can be
 hand-validated. Prints Part-6 metrics per session and in aggregate."""
 
@@ -11,9 +11,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ruleguard.compile_rules import compile_rules  # noqa: E402
-from ruleguard.execute import execute  # noqa: E402
-from ruleguard.transcript import Transcript  # noqa: E402
+from mutalyze.compile_rules import compile_rules  # noqa: E402
+from mutalyze.execute import execute  # noqa: E402
+from mutalyze.transcript import Transcript  # noqa: E402
 
 
 def raw_line(path: str, line_no: int) -> str:

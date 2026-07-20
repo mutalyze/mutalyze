@@ -3,13 +3,13 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ruleguard"
+name = "mutalyze"
 version = "0.1.0"
 description = "Catches your coding agent breaking your own CLAUDE.md rules, and tells you which rule and at which turn."
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
-authors = [{ name = "ruleguard" }]   # TODO: your name/email before first publish
+authors = [{ name = "officialnugudom-star", email = "you@example.com" }]   # TODO: set your (project) email before PyPI upload
 keywords = ["claude", "agent", "claude-code", "rules", "compliance", "audit"]
 dependencies = ["PyYAML>=5.4"]
 classifiers = [
@@ -22,14 +22,14 @@ classifiers = [
   "Topic :: Utilities",
 ]
 
-# TODO before publish: point these at the real repo.
-# [project.urls]
-# Homepage = "https://github.com/<you>/ruleguard"
-# Issues = "https://github.com/<you>/ruleguard/issues"
+[project.urls]
+Homepage = "https://github.com/mutalyze/mutalyze"
+Repository = "https://github.com/mutalyze/mutalyze"
+Issues = "https://github.com/mutalyze/mutalyze/issues"
 
 [project.scripts]
-ruleguard = "ruleguard.cli:main"
+mutalyze = "mutalyze.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ruleguard*"]
+include = ["mutalyze*"]

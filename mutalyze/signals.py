@@ -43,7 +43,7 @@ def _norm(text: str) -> str:
     return " ".join(text.lower().split())
 
 
-def _uid(text: str, salt: str = "ruleguard/v1") -> str:
+def _uid(text: str, salt: str = "mutalyze/v1") -> str:
     return hashlib.sha256((salt + "|" + text).encode("utf-8")).hexdigest()[:16]
 
 
@@ -97,7 +97,7 @@ def assert_clean(payload: Dict, result: ExecResult, doc: CompiledDoc) -> None:
     """
     import json
 
-    # ruleguard's OWN schema vocabulary is allowed to appear in the payload —
+    # mutalyze's OWN schema vocabulary is allowed to appear in the payload —
     # only genuine transcript content leaking is a failure.
     allow = {"command", "content", "ordering", "repo", "session", "violated",
              "held", "unresolved", "exploring", "implementing", "debugging",
