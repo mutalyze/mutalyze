@@ -92,7 +92,7 @@ compiled to `unsupported`; mutalyze always shows you which. See
 ## Install & use
 
 ```bash
-python -m venv .venv && ./.venv/bin/pip install -e .   # PyYAML is the only dep
+pip install git+https://github.com/mutalyze/mutalyze     # PyYAML is the only dependency
 
 cd your-repo
 mutalyze check                 # audits the newest session for this repo

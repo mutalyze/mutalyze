@@ -74,7 +74,7 @@ class TB:
         self.parent = u
 
     def path(self):
-        fd, p = tempfile.mkstemp(prefix="ruleguard_wt_src_", suffix=".jsonl"); os.close(fd)
+        fd, p = tempfile.mkstemp(prefix="mutalyze_wt_src_", suffix=".jsonl"); os.close(fd)
         with open(p, "w", encoding="utf-8") as fh:
             for o in self.lines:
                 fh.write(json.dumps(o) + "\n")
@@ -89,7 +89,7 @@ def _watcher(checks):
 
 def _replay(checks, tb, **kw):
     src = tb.path()
-    fd, dst = tempfile.mkstemp(prefix="ruleguard_wt_dst_", suffix=".jsonl"); os.close(fd)
+    fd, dst = tempfile.mkstemp(prefix="mutalyze_wt_dst_", suffix=".jsonl"); os.close(fd)
     w = _watcher(checks)
     w.run_replay(src, dst, speed=0.0, **kw)
     out = w.out.getvalue()
@@ -140,7 +140,7 @@ def run():
     # 7 — exit summary is byte-identical to what `check` would produce
     tb = TB(); tb.user(); tb.bash("rm -rf ~/z"); tb.bash("git push --force origin main")
     src = tb.path()
-    fd, dst = tempfile.mkstemp(prefix="ruleguard_wt_dst_", suffix=".jsonl"); os.close(fd)
+    fd, dst = tempfile.mkstemp(prefix="mutalyze_wt_dst_", suffix=".jsonl"); os.close(fd)
     w = _watcher(pack)
     w.run_replay(src, dst, speed=0.0)
     got_summary = w.out.getvalue().split("VIOLATIONS")[0].rsplit("\n\n", 1)  # crude anchor

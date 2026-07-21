@@ -262,7 +262,7 @@ def build():
     # a benign final node so the main-path leaf is unambiguous (and post-compaction)
     tb.tool("Read", {"file_path": "/repo/x.py"})
 
-    fd, path = tempfile.mkstemp(prefix="ruleguard_safety_pos_", suffix=".jsonl")
+    fd, path = tempfile.mkstemp(prefix="mutalyze_safety_pos_", suffix=".jsonl")
     os.close(fd)
     tb.dump(path)
     return path, expected, neg_turns, forbidden

@@ -61,7 +61,7 @@ class TB:
 
 def run():
     problems = []
-    repo = tempfile.mkdtemp(prefix="ruleguard_cfix_")
+    repo = tempfile.mkdtemp(prefix="mutalyze_cfix_")
     with open(os.path.join(repo, "CLAUDE.md"), "w") as fh:
         fh.write(CLAUDE_MD)
     for nm in ("a.ts", "b.ts", "c.ts"):
@@ -127,7 +127,7 @@ def run_scope():
     that scope — fire inside it, not outside — and an ambiguous scope must go to
     `unsupported`, never a widened check that flags the wrong tree."""
     problems = []
-    repo = tempfile.mkdtemp(prefix="ruleguard_scope_")
+    repo = tempfile.mkdtemp(prefix="mutalyze_scope_")
     with open(os.path.join(repo, "CLAUDE.md"), "w") as fh:
         fh.write(SCOPE_MD)
 

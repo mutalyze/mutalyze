@@ -159,7 +159,7 @@ def build(repo):
 
 def main():
     import tempfile
-    repo = tempfile.mkdtemp(prefix="ruleguard_fix_")
+    repo = tempfile.mkdtemp(prefix="mutalyze_fix_")
     tpath = build(repo)
 
     doc = compile_rules(repo)

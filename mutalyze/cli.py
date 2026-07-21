@@ -199,7 +199,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
         if not os.path.exists(args.replay):
             _err("ERROR  Replay file not found: %s" % args.replay)
             return 2
-        fd, dst = tempfile.mkstemp(prefix="ruleguard_watch_", suffix=".jsonl")
+        fd, dst = tempfile.mkstemp(prefix="mutalyze_watch_", suffix=".jsonl")
         os.close(fd)
         try:
             return watcher.run_replay(args.replay, dst, speed=args.speed, split_lines=args.split_lines)

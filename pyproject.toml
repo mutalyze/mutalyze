@@ -9,7 +9,7 @@ description = "Catches your coding agent breaking your own CLAUDE.md rules, and 
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
-authors = [{ name = "mutalyze", email = "you@example.com" }]   # TODO: set your (project) email before PyPI upload
+authors = [{ name = "mutalyze", email = "307315485+mutalyze@users.noreply.github.com" }]
 keywords = ["claude", "agent", "claude-code", "rules", "compliance", "audit"]
 dependencies = ["PyYAML>=5.4"]
 classifiers = [
