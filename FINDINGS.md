@@ -146,8 +146,8 @@ number is scored by a rule committed blind.
 
 The cwd bug class sits under all of this: a command check that assumes cwd ==
 repo root is the general hole (the sandbox-`git commit` catch was one instance).
-Session `9ff35ab8` proved it — transcript under the *nugudom* project dir, edits
-in `~/kudzu/src` (353) and `~/cellamind/src` (112). Fixed with recorded `cwd` +
+Session `9ff35ab8` proved it — the transcript sat under one project's dir while the
+edits landed in two *other* checkouts (353 and 112 edits). Fixed with recorded `cwd` +
 resolvable `cd`; the residual (out-of-repo target via a variable, no `cd`) is
 what the unresolved bucket surfaces.
 

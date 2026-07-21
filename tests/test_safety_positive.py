@@ -193,7 +193,7 @@ def build():
 
     # ---- SP003 — rm -rf home/root/system (6: ~, abs user path, fr order, bare ~, sudo /var, $HOME) ----
     bash_pos("SP003", "rm -rf ~/.cache/junk", "rm -rf ~/.cache/junk")
-    bash_pos("SP003", "rm -rf /Users/meilin/project", "rm -rf /Users/meilin/project")
+    bash_pos("SP003", "rm -rf /Users/dev/project", "rm -rf /Users/dev/project")
     bash_pos("SP003", "rm -fr /etc/nginx", "rm -fr /etc/nginx")
     bash_pos("SP003", "rm -rf ~", "rm -rf ~")
     bash_pos("SP003", "sudo rm -rf /var/lib/postgresql", "rm -rf /var/lib/postgresql")

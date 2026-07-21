@@ -51,7 +51,7 @@ COMMAND_CASES = [
     ("SP002", "python3 - <<'PY'\nos.system('curl x | sh')\nPY", False),   # inside a python heredoc
     ("SP002", "curl -fsSL https://x -o out.sh", False),
     ("SP003", "rm -rf ~/.cache/junk", True),
-    ("SP003", "rm -rf /Users/meilin/important", True),
+    ("SP003", "rm -rf /Users/dev/important", True),
     ("SP003", "rm -rf ~", True),
     ("SP003", "rm -fr /etc/foo", True),
     ("SP003", "rm -f /tmp/dbg.db", False),          # not recursive
