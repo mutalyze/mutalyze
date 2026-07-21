@@ -5,3 +5,4 @@ __pycache__/
 .mutalyze/
 dist/
 build/
+examples/session.jsonl
