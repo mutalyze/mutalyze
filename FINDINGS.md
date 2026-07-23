@@ -153,6 +153,44 @@ what the unresolved bucket surfaces.
 
 ---
 
+## 5. Parser robustness on long, compacted sessions (local sweep)
+
+Everything above is about *judging rules*. This section is about the layer under
+that — *reading the transcript* — and it does not change any precision or
+violation number above. A rule verdict is only as good as the path the parser
+reconstructs, and §4 already showed where that path breaks: a naive walk up
+`parentUuid` stops at the last compaction boundary and silently drops the session
+before it.
+
+Method, reproducible with `python tests/sweep_parser_robustness.py`. Over the 10
+longest real sessions on this machine (3 project dirs; longest 10,420 lines; 3
+carried compaction boundaries, 1–4 each), each session is checked for three
+things: it parses without raising; main-path turn numbering is contiguous 1..T
+with every tool call's turn in range and `seq` strictly increasing; and coverage
+is retained across compactions, measured by re-running a naive `parentUuid`-only
+walk and comparing its turn count against the bridged parser's.
+
+| session | lines | compactions | naive walk keeps | bridged keeps | dropped by naive |
+|---|---:|---:|---:|---:|---:|
+| S01 | 10,420 | 4 | 872 | 6,938 | 87% |
+| S02 | 4,562 | 2 | 109 | 3,068 | 96% |
+| S03 | 3,735 | 1 | 717 | 2,790 | 74% |
+
+The seven non-compacted sessions parse identically either way (naive == bridged)
+and all pass. **0 failures across all 10.** The compacted rows are the point: on
+S02 a pre-bridge reader keeps 109 of 3,068 turns, so a rule broken in the first
+96% of that session would be invisible. The bridge recovers it.
+
+**Residual limitation, stated.** This is 10 sessions from one machine and one
+person's usage. It shows the parser survives long and compaction-heavy
+transcripts *as they occur here* — up to four compactions and ~10K lines — not
+that it survives everyone's (other harness versions, heavier branch/rewind
+shapes, sessions longer than any I've run). Like the precision number, the way to
+grow it is other people's long sessions, which is a launch dependency, not a
+local one.
+
+---
+
 ## The number, and why the plan is to ship
 
 - **~1.9 reported violations / 100 turns**, 66 of 67 from one trivial style rule.

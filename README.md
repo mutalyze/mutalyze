@@ -269,12 +269,30 @@ and `unsupported` counts, not just the violation count.
 
 ## Validation
 
-Run against 7 real sessions and hand-checked. This is a small sample and skews
-toward my own work; it isn't yet validated on other people's rule-governed
-sessions. [FINDINGS.md](FINDINGS.md) has the numbers, the held-out precision, and
-the four mistakes made along the way, which is most of what the write-up is about.
+Two separate things are validated here, and one does not stand in for the other.
+
+**Rule-detection precision (7 runs).** Run against 7 real sessions and
+hand-checked. On the 3 held-out sessions, 55 of 55 reported violations cite a
+real in-scope event, with 1 unresolved. This is a small sample and skews toward
+my own work, and none of the 7 sessions ran under the `CLAUDE.md` being checked,
+so it validates the instrument, not agents-breaking-rules-they-were-given. It
+isn't yet validated on other people's rule-governed sessions.
+[FINDINGS.md](FINDINGS.md) has the numbers, the held-out precision, and the four
+mistakes made along the way.
+
+**Parser robustness (long local sessions).** A separate claim, about reading the
+transcript rather than judging rules — it does not change the precision number
+above. The parser was swept over the 10 longest sessions on this machine (longest
+10,420 lines; 3 carried compaction boundaries): no crashes, turn numbering
+contiguous and in range, and coverage retained across every compaction. On the
+10,420-line session with 4 compactions, a naive `parentUuid`-only walk keeps 872
+turns where the parser keeps 6,938 — the compaction bridge recovers the 87% a
+pre-fix reader would silently drop. This is still one machine and one person's
+usage: it shows the parser survives long, compacted transcripts as they occur
+here, not that it survives everyone's.
 
 ```bash
-./.venv/bin/python tests/make_fixture.py       # labeled fixture: every check type, plus false-alarm guards
-./.venv/bin/python tests/test_safety_pack.py   # safety pack both directions: 24 real dangers, 26 look-alikes
+./.venv/bin/python tests/make_fixture.py            # labeled fixture: every check type, plus false-alarm guards
+./.venv/bin/python tests/test_safety_pack.py        # safety pack both directions: 24 real dangers, 26 look-alikes
+./.venv/bin/python tests/sweep_parser_robustness.py # parser over the longest local sessions (naive vs bridged coverage)
 ```
