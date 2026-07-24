@@ -6,8 +6,8 @@ command or edit that proves it. No language model decides whether a rule was
 broken. Every finding is something you can open the transcript and see.
 
 Coding agents run for long stretches with little supervision, and the only
-record of what one did is the JSONL log Claude Code writes to disk. Your rules
-are in one file (`CLAUDE.md` or `AGENTS.md`); the agent's behavior is in another.
+record of what an agent did is the JSONL log Claude Code writes to disk. Your rules
+are in one file (`CLAUDE.md` or `AGENTS.md`), while the agent's behavior is in another.
 mutalyze reads both and compares them.
 
 ## Install
@@ -27,7 +27,7 @@ mutalyze check --verbose       # list held and unsupported rules
 mutalyze check --recompile     # re-run rule compilation
 ```
 
-It finds the most recent Claude Code session for the current directory, compiles
+Mutalyze finds the most recent Claude Code session for the current directory, compiles
 your rules into checks, and runs them. There's nothing to configure.
 
 ```
@@ -83,14 +83,14 @@ rules compiled to `unsupported`, and mutalyze always shows which. See
 
 `mutalyze check` runs after a session ends, so you have to remember to run it.
 `mutalyze watch` follows a live session and prints each violation when it
-happens, then prints the same summary on exit.
+happens, then prints a final summary of each violation on exit.
 
 ```bash
 mutalyze watch                   # follow the newest session
 mutalyze watch --replay s.jsonl  # replay a recorded session
 ```
 
-It stays quiet until a check fires. Safety-pack findings (`rm -rf`, force-push,
+Mutalyze stays quiet until a check fires. Safety-pack findings (`rm -rf`, force-push,
 secrets, `curl | sh`) are marked separately, since those are the ones worth
 seeing right away. It handles the awkward parts of reading a file that's still
 being written: each finding prints once, a rewind that retracts a reported turn
@@ -100,12 +100,12 @@ without re-reporting, and a half-written line is buffered until it's complete.
 Watch mode tails the transcript file. It does not install a hook, so there's no
 config and no change to `~/.claude/settings.json`, and it runs the same checks
 as `check`. The cost of not using a hook: permission-denied tool calls never
-reach the transcript, so watch mode can't see them. It only reports; it never
+reach the transcript, so watch mode can't see them. It only reports but it never
 blocks the agent or changes what it does.
 
 ## Related tools
 
-The problem is known and the pieces exist; what's missing is a single tool you
+The problem is known and the pieces exist but what's missing is a single tool you
 install and point at a repo.
 
 - Rules-file linters (agnix, ctxlint, rule packs) check that your rules file is
@@ -114,12 +114,12 @@ install and point at a repo.
   to generate rules, not to check whether the rules were followed.
 - SpecLock enforces rules, but at the diff and proposed-action layer (a
   pre-commit hook and a check-before-acting MCP tool). Its evidence is a diff or
-  a proposed action; mutalyze's is a turn that actually ran.
+  a proposed action; mutalyze's is a turn that proactively ran.
 - sessionaudit scans transcripts for dangerous commands and secrets, which
   overlaps with mutalyze's safety pack.
 
 mutalyze joins the rules file to the session transcript and returns per-turn
-evidence from one install. That's the part nobody else does.
+evidence from one install.
 
 ## How it works
 
@@ -149,7 +149,7 @@ evidence)`.
 A finding is `violated`, `held`, or `unresolved`. Unresolved covers a command
 whose working directory came from a shell variable (`cd "$D" && grep …`), where
 there's no way to tell whether it ran inside the repo. Those are reported
-separately and you can still open the turn; they're never counted as violations.
+separately and you can still open the turn but they're never counted as violations.
 
 ### Scope
 
@@ -172,7 +172,7 @@ output and raises if any raw content got through. See [TELEMETRY.md](TELEMETRY.m
 
 ### Things that are easy to get wrong, and how it handles them
 
-- Transcripts are trees, not lists. Rewinds and edited prompts create branches,
+- Transcripts are trees and not lists. Rewinds and edited prompts create branches,
   and subagent runs are appended inline. mutalyze follows the main path by parent
   pointers, numbers turns along that path only, and keeps each line's uuid so a
   citation survives renumbering.
