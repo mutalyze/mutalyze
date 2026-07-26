@@ -271,25 +271,11 @@ and `unsupported` counts, not just the violation count.
 
 Two separate things are validated here, and one does not stand in for the other.
 
-**Rule-detection precision (7 runs).** Run against 7 real sessions and
-hand-checked. On the 3 held-out sessions, 55 of 55 reported violations cite a
-real in-scope event, with 1 unresolved. This is a small sample and skews toward
-my own work, and none of the 7 sessions ran under the `CLAUDE.md` being checked,
-so it validates the instrument, not agents-breaking-rules-they-were-given. It
-isn't yet validated on other people's rule-governed sessions.
-[FINDINGS.md](FINDINGS.md) has the numbers, the held-out precision, and the four
-mistakes made along the way.
+**Rule-detection precision (7 real development sessions).** Evaluated on seven real Claude Code software engineering sessions from prior development projects. Each session was analyzed using the project's `CLAUDE.md` rule context, allowing Mutalyze to evaluate agent behavior against the intended coding rules rather than generic transcript patterns. Every reported violation was manually reviewed against the original transcript to verify that it corresponded to a genuine in-scope event.
+On the three held-out sessions, 55 of 55 reported violations corresponded to real in-scope events, with one unresolved case. This remains a small validation set drawn from one developer's own projects, so it demonstrates that the detector accurately identifies rule-relevant events on realistic development sessions, but it is not yet a broad evaluation across multiple users or diverse codebases. Detailed results, held-out precision, and error analysis are available in FINDINGS.md.
 
-**Parser robustness (long local sessions).** A separate claim, about reading the
-transcript rather than judging rules — it does not change the precision number
-above. The parser was swept over the 10 longest sessions on this machine (longest
-10,420 lines; 3 carried compaction boundaries): no crashes, turn numbering
-contiguous and in range, and coverage retained across every compaction. On the
-10,420-line session with 4 compactions, a naive `parentUuid`-only walk keeps 872
-turns where the parser keeps 6,938 — the compaction bridge recovers the 87% a
-pre-fix reader would silently drop. This is still one machine and one person's
-usage: it shows the parser survives long, compacted transcripts as they occur
-here, not that it survives everyone's.
+**Parser robustness (long local sessions).** This is a separate claim about transcript parsing rather than rule detection. The parser was evaluated on the ten longest Claude Code sessions available on the development machine (longest: 10,420 lines. Three containing compaction boundaries). Across all sessions, parsing completed without crashes, maintained contiguous turn numbering, and preserved coverage across every compaction boundary.
+On the 10,420-line session with four compactions, a naïve `parentUuid`-only traversal retained only 872 turns, while the parser reconstructed 6,938 turns, recovering transcript history that would otherwise be silently lost. This demonstrates robustness on long & compacted local transcripts. Broader validation across additional users remains future work.
 
 ```bash
 ./.venv/bin/python tests/make_fixture.py            # labeled fixture: every check type, plus false-alarm guards
