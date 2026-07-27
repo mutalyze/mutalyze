@@ -1,5 +1,8 @@
 import './style.css';
 import { animate, createTimeline, stagger, utils } from 'animejs';
+import { initHelix } from './helix3d.js';
+
+let helix = null;   // 3D DNA helix (null if WebGL unavailable)
 
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -120,6 +123,7 @@ function startMutationCycle() {
       opacity: [0, 1], translateY: [10, 0], scale: [0.96, 1], rotate: ['-1.2deg', '0deg'],
       duration: 520, ease: 'outBack',
     });
+    if (helix) helix.flare(m.broke);   // a node in the 3D helix mutates + flares
 
     await wait(2600);
     await new Promise((done) =>
@@ -224,7 +228,19 @@ function initCopy() {
 }
 
 /* ── boot ────────────────────────────────────────────────────────────── */
+function initHelixSafely() {
+  const el = $('[data-helix]');
+  if (!el) return;
+  try {
+    helix = initHelix(el, { reduced: REDUCED });
+  } catch (err) {
+    el.style.display = 'none';   // WebGL unavailable → degrade gracefully
+    console.warn('[helix] WebGL unavailable, skipping 3D scene:', err && err.message);
+  }
+}
+
 initCopy();
+initHelixSafely();
 if (REDUCED) {
   staticConsole();
 } else {
