@@ -319,3 +319,29 @@ section { max-width: var(--maxw); margin: 0 auto; padding: 84px 28px; }
   .stats { grid-template-columns: 1fr; }
   section { padding: 60px 22px; }
 }
+
+/* ── projection-screen treatment for panels ──────────────────────────── */
+.screen { position: relative; border-radius: 2px; border-color: rgba(99,247,166,.22); }
+/* scanlines + soft projector glow from the top */
+.screen::before {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  border-radius: inherit;
+  background:
+    repeating-linear-gradient(0deg, rgba(99,247,166,.045) 0 1px, transparent 1px 3px),
+    radial-gradient(130% 90% at 50% -12%, rgba(99,247,166,.06), transparent 55%);
+}
+/* HUD corner brackets (four L-shaped ticks) */
+.screen::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  --b: rgba(99,247,166,.6); --s: 14px; --t: 1.5px;
+  background:
+    linear-gradient(var(--b), var(--b)) 0 0      / var(--s) var(--t),
+    linear-gradient(var(--b), var(--b)) 0 0      / var(--t) var(--s),
+    linear-gradient(var(--b), var(--b)) 100% 0   / var(--s) var(--t),
+    linear-gradient(var(--b), var(--b)) 100% 0   / var(--t) var(--s),
+    linear-gradient(var(--b), var(--b)) 0 100%   / var(--s) var(--t),
+    linear-gradient(var(--b), var(--b)) 0 100%   / var(--t) var(--s),
+    linear-gradient(var(--b), var(--b)) 100% 100%/ var(--s) var(--t),
+    linear-gradient(var(--b), var(--b)) 100% 100%/ var(--t) var(--s);
+  background-repeat: no-repeat;
+}

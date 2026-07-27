@@ -63,7 +63,7 @@
       </div>
 
       <!-- the mutation console: the anime.js centerpiece -->
-      <div class="console" data-hero aria-label="Example: a mutation being caught">
+      <div class="console screen" data-hero aria-label="Example: a mutation being caught">
         <div class="console__bar">
           <span class="console__dots"><i></i><i></i><i></i></span>
           <span class="console__file">session · src/checkout.ts</span>
@@ -93,17 +93,17 @@
         JSONL transcript Claude Code writes to disk. mutalyze reads both and lines them up.
       </p>
       <ol class="steps">
-        <li class="step reveal">
+        <li class="step reveal screen">
           <span class="step__n">01</span>
           <h3>Agent mutates</h3>
           <p>Every tool call — each edit, each command — is a change to your repo, recorded turn by turn.</p>
         </li>
-        <li class="step reveal">
+        <li class="step reveal screen">
           <span class="step__n">02</span>
           <h3>mutalyze reads</h3>
           <p>It compiles your <code>CLAUDE.md</code> into checkable rules and walks the transcript deterministically. No LLM in the loop.</p>
         </li>
-        <li class="step reveal">
+        <li class="step reveal screen">
           <span class="step__n">03</span>
           <h3>Mutations flagged</h3>
           <p>Each broken rule is reported with its id, the turn, and the command or edit that proves it. Open the transcript and see it yourself.</p>
@@ -117,7 +117,7 @@
         <h2 class="section__title reveal">Real output. Real transcript.</h2>
         <p class="section__lead reveal">This is the actual report from the demo session — nothing mocked.</p>
       </div>
-      <pre class="report reveal"><code><span class="r-head">Session: session  (8 turns, 18m)</span>
+      <pre class="report reveal screen"><code><span class="r-head">Session: session  (8 turns, 18m)</span>
 <span class="r-dim">Rules:   5 found · 9 checks (incl. safety pack) · 0 unsupported</span>
 
 <span class="r-label r-broke">VIOLATIONS (2)</span>
@@ -143,11 +143,11 @@
     <!-- ── INSTALL ──────────────────────────────────────────── -->
     <section id="install" class="install">
       <h2 class="section__title reveal">Point it at a session.</h2>
-      <div class="cmdbox reveal">
+      <div class="cmdbox reveal screen">
         <code id="install-cmd">pip install git+https://github.com/mutalyze/mutalyze</code>
         <button class="copy" data-copy="pip install git+https://github.com/mutalyze/mutalyze" aria-label="Copy install command">copy</button>
       </div>
-      <div class="cmdbox cmdbox--sub reveal">
+      <div class="cmdbox cmdbox--sub reveal screen">
         <code>mutalyze check          <span class="r-dim"># audit the newest session for this repo</span></code>
       </div>
       <p class="install__note reveal">PyYAML is the only dependency. MIT licensed. Runs entirely on your machine.</p>
