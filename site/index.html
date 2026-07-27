@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>mutalyze — catch your agent mutating your code</title>
+  <meta name="description" content="Your AI coding agent mutates your codebase for hours unsupervised. mutalyze catches every mutation that breaks your CLAUDE.md rules — deterministically, per turn, with proof. No LLM decides." />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+</head>
+<body>
+  <!-- drifting mutation field (populated by JS; purely decorative) -->
+  <div class="mutefield" aria-hidden="true"></div>
+
+  <header class="nav" data-hero>
+    <a class="brand" href="#top" aria-label="mutalyze home">
+      <svg class="brand__mark" viewBox="0 0 32 40" width="24" height="30" aria-hidden="true">
+        <path class="helix-a" d="M6 2 C 26 10, 6 18, 26 26 C 6 34, 26 38, 26 38" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path class="helix-b" d="M26 2 C 6 10, 26 18, 6 26 C 26 34, 6 38, 6 38" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <g class="helix-rungs" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <line x1="9" y1="8" x2="23" y2="8"/>
+          <line x1="9" y1="20" x2="23" y2="20"/>
+          <line x1="9" y1="32" x2="23" y2="32"/>
+        </g>
+      </svg>
+      <span class="brand__word">mutalyze</span>
+    </a>
+    <nav class="nav__links">
+      <a href="#how">How it works</a>
+      <a href="#proof">The proof</a>
+      <a href="#install">Install</a>
+      <a class="nav__gh" href="https://github.com/mutalyze/mutalyze" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- ── HERO ─────────────────────────────────────────────── -->
+    <section class="hero">
+      <div class="hero__copy">
+        <p class="eyebrow" data-hero>DETERMINISTIC · PER-TURN · NEVER LEAVES YOUR MACHINE</p>
+        <h1 class="hero__title" data-split>Your agent is mutating your code.</h1>
+        <p class="hero__sub" data-hero>
+          Coding agents run for hours with little supervision. Every edit and command
+          is a mutation to your codebase. <strong>mutalyze</strong> reads the session
+          transcript and flags every mutation that breaks your <code>CLAUDE.md</code>
+          rules — which rule, which turn, with the exact command or edit that proves it.
+          No language model decides.
+        </p>
+        <div class="hero__cta" data-hero>
+          <a class="btn btn--primary" href="#install">Get started</a>
+          <a class="btn btn--ghost" href="https://github.com/mutalyze/mutalyze" target="_blank" rel="noopener">Read the source</a>
+        </div>
+        <div class="legend" data-hero>
+          <span><i class="dot dot--broke"></i>broke a rule</span>
+          <span><i class="dot dot--held"></i>allowed</span>
+          <span><i class="dot dot--unclear"></i>can't tell</span>
+        </div>
+      </div>
+
+      <!-- the mutation console: the anime.js centerpiece -->
+      <div class="console" data-hero aria-label="Example: a mutation being caught">
+        <div class="console__bar">
+          <span class="console__dots"><i></i><i></i><i></i></span>
+          <span class="console__file">session · src/checkout.ts</span>
+          <span class="console__live">watching</span>
+        </div>
+        <div class="console__body">
+          <div class="line line--dim">● Read&nbsp;&nbsp;src/checkout.ts</div>
+          <div class="line line--dim">● Edit&nbsp;&nbsp;src/checkout.ts</div>
+          <div class="line line--call">
+            <span class="tool" data-tool>Bash</span>
+            <span class="cmd" data-mutate>&nbsp;</span>
+          </div>
+          <div class="verdict" data-verdict hidden>
+            <span class="verdict__turn" data-turn></span>
+            <span class="verdict__code" data-code></span>
+            <span class="verdict__rule" data-rule></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── HOW IT WORKS ─────────────────────────────────────── -->
+    <section id="how" class="how">
+      <h2 class="section__title reveal">Three files. One comparison.</h2>
+      <p class="section__lead reveal">
+        Your rules live in one file. Your agent's behavior lives in another — the
+        JSONL transcript Claude Code writes to disk. mutalyze reads both and lines them up.
+      </p>
+      <ol class="steps">
+        <li class="step reveal">
+          <span class="step__n">01</span>
+          <h3>Agent mutates</h3>
+          <p>Every tool call — each edit, each command — is a change to your repo, recorded turn by turn.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step__n">02</span>
+          <h3>mutalyze reads</h3>
+          <p>It compiles your <code>CLAUDE.md</code> into checkable rules and walks the transcript deterministically. No LLM in the loop.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step__n">03</span>
+          <h3>Mutations flagged</h3>
+          <p>Each broken rule is reported with its id, the turn, and the command or edit that proves it. Open the transcript and see it yourself.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ── PROOF: real output ───────────────────────────────── -->
+    <section id="proof" class="proof">
+      <div class="proof__head">
+        <h2 class="section__title reveal">Real output. Real transcript.</h2>
+        <p class="section__lead reveal">This is the actual report from the demo session — nothing mocked.</p>
+      </div>
+      <pre class="report reveal"><code><span class="r-head">Session: session  (8 turns, 18m)</span>
+<span class="r-dim">Rules:   5 found · 9 checks (incl. safety pack) · 0 unsupported</span>
+
+<span class="r-label r-broke">VIOLATIONS (2)</span>
+
+  <span class="r-reveal">turn 5      <b class="r-broke">CM001</b>  Use <code>rg</code> (not <code>grep</code>) for searching.
+                Bash → grep -rn "TODO" src/</span>
+
+  <span class="r-reveal">turn 7      <b class="r-broke">SP003</b>  Never recursively <code>rm -rf</code> a home, root, or system path.
+                Bash → rm -rf ~/.cache/checkout-build</span>
+
+<span class="r-label r-held">HELD (7 rules, no violations)</span>
+  <span class="r-dim">turn 8      git push origin feature/checkout   — not a force-push, not main</span></code></pre>
+    </section>
+
+    <!-- ── STATS ────────────────────────────────────────────── -->
+    <section class="stats">
+      <div class="stat reveal"><span class="stat__num" data-count="3459">0</span><span class="stat__label">turns audited on real sessions</span></div>
+      <div class="stat reveal"><span class="stat__num" data-count="55" data-suffix="/55">0</span><span class="stat__label">flagged violations verified real</span></div>
+      <div class="stat reveal"><span class="stat__num" data-count="0">0</span><span class="stat__label">bytes of code sent off your machine</span></div>
+      <div class="stat reveal"><span class="stat__num" data-count="1">0</span><span class="stat__label">dependency to install (just PyYAML)</span></div>
+    </section>
+
+    <!-- ── INSTALL ──────────────────────────────────────────── -->
+    <section id="install" class="install">
+      <h2 class="section__title reveal">Point it at a session.</h2>
+      <div class="cmdbox reveal">
+        <code id="install-cmd">pip install git+https://github.com/mutalyze/mutalyze</code>
+        <button class="copy" data-copy="pip install git+https://github.com/mutalyze/mutalyze" aria-label="Copy install command">copy</button>
+      </div>
+      <div class="cmdbox cmdbox--sub reveal">
+        <code>mutalyze check          <span class="r-dim"># audit the newest session for this repo</span></code>
+      </div>
+      <p class="install__note reveal">PyYAML is the only dependency. MIT licensed. Runs entirely on your machine.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span class="brand__word">mutalyze</span>
+    <span class="foot__tag">Catch your coding agent breaking your own CLAUDE.md rules — deterministically, per turn.</span>
+    <a href="https://github.com/mutalyze/mutalyze" target="_blank" rel="noopener">github.com/mutalyze/mutalyze</a>
+  </footer>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
