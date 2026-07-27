@@ -1,0 +1,6 @@
+# mutalyze — https://[YOUR DOMAIN]
+User-agent: *
+Allow: /
+
+# Security contact / vulnerability disclosure:
+# /.well-known/security.txt

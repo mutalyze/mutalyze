@@ -1,0 +1,8 @@
+# mutalyze security contact (RFC 9116)
+# BEFORE DEPLOY: fill the [PLACEHOLDERS] and set a real Expires date (<= 1 year out).
+Contact: mailto:[SECURITY CONTACT EMAIL]
+Contact: https://github.com/mutalyze/mutalyze/security/advisories/new
+Expires: [YYYY-MM-DDT00:00:00.000Z]
+Preferred-Languages: en
+Canonical: https://[YOUR DOMAIN]/.well-known/security.txt
+Policy: https://github.com/mutalyze/mutalyze/blob/main/SECURITY.md
