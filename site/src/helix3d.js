@@ -155,7 +155,7 @@ export function initHelix(container, { reduced = false } = {}) {
   // calm ambient red flares, plus whatever the console cycle triggers
   let ambientTO = 0;
   function scheduleAmbient() {
-    const delay = 2400 + Math.random() * 3200;
+    const delay = 1000 + Math.random() * 400;   // steady ~1.0–1.4s between flares
     ambientTO = setTimeout(() => { flare(true); scheduleAmbient(); }, delay);
   }
   function start() {
