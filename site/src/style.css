@@ -288,6 +288,7 @@ section { max-width: var(--maxw); margin: 0 auto; padding: 84px 28px; }
 }
 .foot .brand__word { color: var(--ink); }
 .foot__tag { flex: 1 1 320px; }
+.foot__legal { display: inline-flex; gap: 20px; flex-wrap: wrap; }
 .foot a { color: var(--toxic-2); font-family: var(--mono); }
 .foot a:hover { color: var(--toxic); }
 
