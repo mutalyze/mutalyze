@@ -31,8 +31,8 @@ export function initHelix(container, { reduced = false } = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
   // z chosen so the helix (HEIGHT below) fits the vertical frustum with margin:
-  // visible height at z=0 ≈ 2*z*tan(fov/2) ≈ 2*7.6*0.384 ≈ 5.8 > HEIGHT 5.4
-  camera.position.set(0, 0, 7.6);
+  // visible height ≈ 2*z*tan(fov/2) ≈ 2*8.0*0.384 ≈ 6.14 > HEIGHT 5.6
+  camera.position.set(0, 0, 8.0);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -45,9 +45,9 @@ export function initHelix(container, { reduced = false } = {}) {
   scene.add(group);
 
   const glowTex = makeGlowTexture();
-  const NODES = 26, R = 1.9, TURN = 0.5, HEIGHT = 5.6;   // R up → fatter, DNA-like
-  const GLOW_BASE = 0.62;
-  const sphereGeo = new THREE.SphereGeometry(0.08, 18, 18);
+  const NODES = 30, R = 1.3, TURN = 0.52, HEIGHT = 5.6;   // ~2.5 turns, compact helix
+  const GLOW_BASE = 0.5;
+  const sphereGeo = new THREE.SphereGeometry(0.11, 18, 18);
   const nodes = [];
 
   function addNode(x, y, z) {
@@ -86,7 +86,7 @@ export function initHelix(container, { reduced = false } = {}) {
     const a = strandA[i], b = strandB[i];
     const dir = new THREE.Vector3().subVectors(b, a);
     const len = dir.length();
-    const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, len, 8), rungMat);
+    const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, len, 10), rungMat);
     rung.position.copy(a).add(b).multiplyScalar(0.5);
     rung.quaternion.setFromUnitVectors(Y_AXIS, dir.normalize());
     group.add(rung);
@@ -95,7 +95,7 @@ export function initHelix(container, { reduced = false } = {}) {
   const backboneMat = new THREE.MeshBasicMaterial({ color: GREEN, transparent: true, opacity: 0.6 });
   for (const pts of [strandA, strandB]) {
     const curve = new THREE.CatmullRomCurve3(pts);
-    const geo = new THREE.TubeGeometry(curve, NODES * 8, 0.055, 12, false);
+    const geo = new THREE.TubeGeometry(curve, NODES * 8, 0.12, 14, false);   // thick strands
     group.add(new THREE.Mesh(geo, backboneMat));
   }
 
@@ -124,7 +124,7 @@ export function initHelix(container, { reduced = false } = {}) {
   // of the console cycle, so red spots keep popping across the whole helix.
   let ambientTO = 0;
   function scheduleAmbient() {
-    const delay = 220 + Math.random() * 430;   // ~0.22–0.65s between flares
+    const delay = 2400 + Math.random() * 3200;   // ~2.4–5.6s between flares (calmer)
     ambientTO = setTimeout(() => { flare(true); scheduleAmbient(); }, delay);
   }
   function start() {
