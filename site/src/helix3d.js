@@ -45,7 +45,7 @@ export function initHelix(container, { reduced = false } = {}) {
   // ── cinematic bloom pipeline ───────────────────────────────────────
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.85, 0.55, 0.06); // strength, radius, threshold
+  const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.4, 0.22); // strength, radius, threshold — subtle
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -56,7 +56,7 @@ export function initHelix(container, { reduced = false } = {}) {
   // ── helix geometry (tall — spans the full scroll) ─────────────────
   const glowTex = makeGlowTexture();
   const NODES = 74, R = 1.25, TURN = 0.5, HEIGHT = 20;
-  const GLOW_BASE = 0.42;
+  const GLOW_BASE = 0.34;
   const sphereGeo = new THREE.SphereGeometry(0.1, 16, 16);
   const nodes = [];
 
@@ -67,7 +67,7 @@ export function initHelix(container, { reduced = false } = {}) {
     group.add(sph);
     const sprMat = new THREE.SpriteMaterial({
       map: glowTex, color: GREEN.clone(), blending: THREE.AdditiveBlending,
-      transparent: true, depthWrite: false, opacity: 0.7,
+      transparent: true, depthWrite: false, opacity: 0.4,
     });
     const spr = new THREE.Sprite(sprMat);
     spr.scale.setScalar(GLOW_BASE);
@@ -117,7 +117,7 @@ export function initHelix(container, { reduced = false } = {}) {
   const pGeo = new THREE.BufferGeometry();
   pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
   const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({
-    color: GREEN, size: 0.035, transparent: true, opacity: 0.5,
+    color: GREEN, size: 0.03, transparent: true, opacity: 0.3,
     blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
   }));
   group.add(particles);
@@ -200,14 +200,14 @@ export function initHelix(container, { reduced = false } = {}) {
         node.sprMat.color.copy(node.mat.color);
         node.sph.scale.setScalar(1 + k * (peak - 1));
         node.spr.scale.setScalar(GLOW_BASE * (1 + k * 2.4));
-        node.sprMat.opacity = 0.7 + k * 0.3;
+        node.sprMat.opacity = 0.4 + k * 0.45;
       },
       onComplete: () => {
         node.mat.color.copy(GREEN);
         node.sprMat.color.copy(GREEN);
         node.sph.scale.setScalar(1);
         node.spr.scale.setScalar(GLOW_BASE);
-        node.sprMat.opacity = 0.7;
+        node.sprMat.opacity = 0.4;
       },
     });
   }
