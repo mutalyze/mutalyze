@@ -1,9 +1,10 @@
-import '@fontsource/syne/700.css';
-import '@fontsource/syne/800.css';
-import '@fontsource/archivo/400.css';
-import '@fontsource/archivo/600.css';
-import '@fontsource/space-mono/400.css';
-import '@fontsource/space-mono/700.css';
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/500.css';
+import '@fontsource/ibm-plex-sans/600.css';
+import '@fontsource/ibm-plex-sans/700.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
+import '@fontsource/ibm-plex-mono/600.css';
 import './style.css';
 import { animate, createTimeline, stagger, utils } from 'animejs';
 import { initHelix } from './helix3d.js';

@@ -23,9 +23,9 @@
 
   --glow: 0 0 24px rgba(99,247,166,.35);
 
-  --display: "Syne", "Archivo", -apple-system, system-ui, sans-serif;
-  --sans: "Archivo", -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-  --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --display: "IBM Plex Sans", -apple-system, system-ui, sans-serif;
+  --sans: "IBM Plex Sans", -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --maxw: 1120px;
   --r: 12px;
@@ -130,10 +130,10 @@ code { font-family: var(--mono); }
 }
 .hero__title {
   font-family: var(--display);
-  font-size: clamp(38px, 5.6vw, 68px);
-  line-height: 1.0;
-  letter-spacing: -.02em;
-  font-weight: 800;
+  font-size: clamp(38px, 5.6vw, 66px);
+  line-height: 1.03;
+  letter-spacing: -.025em;
+  font-weight: 700;
   margin: 0 0 22px;
   text-wrap: balance;
 }
