@@ -45,8 +45,9 @@ export function initHelix(container, { reduced = false } = {}) {
   scene.add(group);
 
   const glowTex = makeGlowTexture();
-  const NODES = 24, R = 1.15, TURN = 0.52, HEIGHT = 5.4;
-  const sphereGeo = new THREE.SphereGeometry(0.052, 16, 16);
+  const NODES = 26, R = 1.9, TURN = 0.5, HEIGHT = 5.6;   // R up → fatter, DNA-like
+  const GLOW_BASE = 0.62;
+  const sphereGeo = new THREE.SphereGeometry(0.08, 18, 18);
   const nodes = [];
 
   function addNode(x, y, z) {
@@ -60,37 +61,42 @@ export function initHelix(container, { reduced = false } = {}) {
       transparent: true, depthWrite: false, opacity: 0.85,
     });
     const spr = new THREE.Sprite(sprMat);
-    spr.scale.setScalar(0.42);
+    spr.scale.setScalar(GLOW_BASE);
     spr.position.set(x, y, z);
     group.add(spr);
 
     nodes.push({ sph, spr, mat, sprMat, baseScale: 1 });
   }
 
-  const rungMat = new THREE.LineBasicMaterial({ color: GREEN, transparent: true, opacity: 0.16 });
   const strandA = [], strandB = [];
   for (let i = 0; i < NODES; i++) {
     const a = i * TURN;
     const y = (i / (NODES - 1) - 0.5) * HEIGHT;
-    const ax = Math.cos(a) * R,          az = Math.sin(a) * R;
+    const ax = Math.cos(a) * R,           az = Math.sin(a) * R;
     const bx = Math.cos(a + Math.PI) * R, bz = Math.sin(a + Math.PI) * R;
     addNode(ax, y, az);
     addNode(bx, y, bz);
     strandA.push(new THREE.Vector3(ax, y, az));
     strandB.push(new THREE.Vector3(bx, y, bz));
-    if (i % 2 === 0) {
-      const geo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(ax, y, az), new THREE.Vector3(bx, y, bz),
-      ]);
-      group.add(new THREE.Line(geo, rungMat));
-    }
   }
-  // backbone strands (faint smooth curves through each strand's nodes)
-  const backboneMat = new THREE.LineBasicMaterial({ color: GREEN, transparent: true, opacity: 0.3 });
+  // base-pair rungs as solid cylinders — the ladder between the two strands
+  const rungMat = new THREE.MeshBasicMaterial({ color: GREEN, transparent: true, opacity: 0.4 });
+  const Y_AXIS = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < NODES; i++) {
+    const a = strandA[i], b = strandB[i];
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const len = dir.length();
+    const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, len, 8), rungMat);
+    rung.position.copy(a).add(b).multiplyScalar(0.5);
+    rung.quaternion.setFromUnitVectors(Y_AXIS, dir.normalize());
+    group.add(rung);
+  }
+  // sugar-phosphate backbones as thick glowing tubes
+  const backboneMat = new THREE.MeshBasicMaterial({ color: GREEN, transparent: true, opacity: 0.6 });
   for (const pts of [strandA, strandB]) {
     const curve = new THREE.CatmullRomCurve3(pts);
-    const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(NODES * 6));
-    group.add(new THREE.Line(geo, backboneMat));
+    const geo = new THREE.TubeGeometry(curve, NODES * 8, 0.055, 12, false);
+    group.add(new THREE.Mesh(geo, backboneMat));
   }
 
   // ── interaction state ──────────────────────────────────────────────
@@ -114,8 +120,21 @@ export function initHelix(container, { reduced = false } = {}) {
     renderer.render(scene, camera);
     raf = requestAnimationFrame(tick);
   }
-  function start() { if (!running && !reduced) { running = true; clock.start(); tick(); } }
-  function stop()  { if (running) { running = false; cancelAnimationFrame(raf); } }
+  // ambient "mutation storm": frequent red flares on random nodes, independent
+  // of the console cycle, so red spots keep popping across the whole helix.
+  let ambientTO = 0;
+  function scheduleAmbient() {
+    const delay = 220 + Math.random() * 430;   // ~0.22–0.65s between flares
+    ambientTO = setTimeout(() => { flare(true); scheduleAmbient(); }, delay);
+  }
+  function start() {
+    if (running || reduced) return;
+    running = true; clock.start(); tick(); scheduleAmbient();
+  }
+  function stop() {
+    if (!running) return;
+    running = false; cancelAnimationFrame(raf); clearTimeout(ambientTO);
+  }
 
   // pause when the hero scrolls out of view (battery + perf)
   const io = new IntersectionObserver(([e]) => (e.isIntersecting ? start() : stop()), { threshold: 0 });
@@ -145,14 +164,14 @@ export function initHelix(container, { reduced = false } = {}) {
         node.mat.color.copy(GREEN).lerp(target, k);
         node.sprMat.color.copy(node.mat.color);
         node.sph.scale.setScalar(1 + k * (peak - 1));
-        node.spr.scale.setScalar(0.42 * (1 + k * 2.2));
+        node.spr.scale.setScalar(GLOW_BASE * (1 + k * 2.2));
         node.sprMat.opacity = 0.85 + k * 0.15;
       },
       onComplete: () => {
         node.mat.color.copy(GREEN);
         node.sprMat.color.copy(GREEN);
         node.sph.scale.setScalar(1);
-        node.spr.scale.setScalar(0.42);
+        node.spr.scale.setScalar(GLOW_BASE);
         node.sprMat.opacity = 0.85;
       },
     });

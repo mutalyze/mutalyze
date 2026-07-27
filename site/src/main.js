@@ -185,20 +185,24 @@ function initMuteField() {
   const field = $('.mutefield');
   if (!field) return;
   const BASES = 'ACGT';
-  const N = window.innerWidth < 700 ? 12 : 24;
+  const N = window.innerWidth < 700 ? 16 : 30;
   for (let n = 0; n < N; n++) {
     const mote = document.createElement('span');
     mote.className = 'mote';
     mote.textContent = BASES[(Math.random() * BASES.length) | 0];
     mote.style.left = (Math.random() * 100) + '%';
-    mote.style.fontSize = (10 + Math.random() * 12) + 'px';
+    mote.style.fontSize = (16 + Math.random() * 24) + 'px';   // bigger, more prominent
     field.appendChild(mote);
     const drift = () => {
+      const mutated = Math.random() < 0.34;                    // ~1 in 3 letters mutates → red
+      mote.textContent = BASES[(Math.random() * BASES.length) | 0];
+      mote.style.color = mutated ? 'var(--broke)' : 'var(--toxic)';
+      const peak = mutated ? 0.92 : 0.6;
       utils.set(mote, { translateY: '110vh', translateX: 0, opacity: 0 });
       animate(mote, {
         translateY: ['110vh', '-12vh'],
         translateX: [0, (Math.random() * 60 - 30)],
-        opacity: [0, 0.5, 0.5, 0],
+        opacity: [0, peak, peak, 0],
         duration: 9000 + Math.random() * 9000,
         ease: 'linear',
         delay: Math.random() * 8000,

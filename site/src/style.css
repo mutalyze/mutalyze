@@ -60,8 +60,10 @@ body::before {
 .mutefield .mote {
   position: absolute;
   font-family: var(--mono);
-  font-size: 13px;
+  font-weight: 600;
+  font-size: 18px;
   color: var(--toxic);
+  text-shadow: 0 0 10px currentColor, 0 0 22px currentColor;   /* glow follows color */
   opacity: 0;
   user-select: none;
   will-change: transform, opacity;
