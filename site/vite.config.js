@@ -6,4 +6,6 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 // (used to produce a portable, zero-setup preview).
 export default defineConfig({
   plugins: process.env.SINGLEFILE ? [viteSingleFile()] : [],
+  // inline fonts (base64) so both builds are self-contained and need no font requests
+  build: { assetsInlineLimit: 1024 * 512 },
 });

@@ -8,6 +8,12 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 </head>
 <body>
+  <!-- full-page 3D DNA helix background (WebGL) + readability scrim -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg__stage" data-helix></div>
+    <div class="bg__scrim"></div>
+  </div>
+
   <!-- drifting mutation field (populated by JS; purely decorative) -->
   <div class="mutefield" aria-hidden="true"></div>
 
@@ -35,7 +41,6 @@
   <main id="top">
     <!-- ── HERO ─────────────────────────────────────────────── -->
     <section class="hero">
-      <div class="hero__stage" data-helix aria-hidden="true"></div>
       <div class="hero__copy">
         <p class="eyebrow" data-hero>DETERMINISTIC · PER-TURN · NEVER LEAVES YOUR MACHINE</p>
         <h1 class="hero__title" data-split>Your agent is mutating your code.</h1>

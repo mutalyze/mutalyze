@@ -23,8 +23,9 @@
 
   --glow: 0 0 24px rgba(99,247,166,.35);
 
-  --sans: -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  --display: "Syne", "Archivo", -apple-system, system-ui, sans-serif;
+  --sans: "Archivo", -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --maxw: 1120px;
   --r: 12px;
@@ -48,15 +49,30 @@ body {
   overflow-x: hidden;
 }
 
+/* full-page WebGL helix background + readability scrim */
+.bg { position: fixed; inset: 0; z-index: 0; background: #05070b; }
+.bg__stage { position: absolute; inset: 0; }
+.bg__stage canvas { width: 100% !important; height: 100% !important; display: block; }
+.bg__scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg,
+    rgba(5,7,11,.97) 0%, rgba(5,7,11,.9) 26%, rgba(5,7,11,.55) 50%,
+    rgba(5,7,11,.15) 74%, rgba(5,7,11,0) 92%);
+}
+.bg__scrim::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(5,7,11,.85), transparent 14%, transparent 86%, rgba(5,7,11,.85));
+}
+
 /* faint scanline / grain overlay */
 body::before {
   content: "";
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
   background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0 1px, transparent 1px 3px);
   mix-blend-mode: overlay;
 }
 
-.mutefield { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.mutefield { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
 .mutefield .mote {
   position: absolute;
   font-family: var(--mono);
@@ -69,7 +85,7 @@ body::before {
   will-change: transform, opacity;
 }
 
-main, .nav, .foot { position: relative; z-index: 1; }
+main, .nav, .foot { position: relative; z-index: 3; }
 
 a { color: inherit; text-decoration: none; }
 code { font-family: var(--mono); }
@@ -105,20 +121,7 @@ code { font-family: var(--mono); }
   align-items: center;
   position: relative;
 }
-/* WebGL DNA helix mounts here, behind the hero content */
-.hero__stage {
-  position: absolute;
-  top: -4%; bottom: -4%; right: -6%;
-  width: 66%;
-  z-index: 0;
-  pointer-events: none;
-}
-.hero__stage canvas { width: 100% !important; height: 100% !important; display: block; }
 .hero__copy { position: relative; z-index: 2; }
-.hero__copy::before {   /* readability wash so the helix never fights the text */
-  content: ""; position: absolute; inset: -30px -60px -30px -40px; z-index: -1;
-  background: radial-gradient(70% 80% at 20% 45%, rgba(8,11,9,.92), rgba(8,11,9,.55) 55%, transparent 80%);
-}
 .hero .console { position: relative; z-index: 2; }
 .eyebrow {
   font-family: var(--mono);
@@ -126,11 +129,13 @@ code { font-family: var(--mono); }
   margin: 0 0 18px;
 }
 .hero__title {
-  font-size: clamp(38px, 5.6vw, 66px);
-  line-height: 1.02;
-  letter-spacing: -.03em;
-  font-weight: 680;
+  font-family: var(--display);
+  font-size: clamp(38px, 5.6vw, 68px);
+  line-height: 1.0;
+  letter-spacing: -.02em;
+  font-weight: 800;
   margin: 0 0 22px;
+  text-wrap: balance;
 }
 .hero__title .word { display: inline-block; white-space: nowrap; }
 .hero__title .ch { display: inline-block; white-space: pre; will-change: transform, opacity; }
@@ -214,7 +219,7 @@ code { font-family: var(--mono); }
 
 /* ── sections shared ─────────────────────────────────── */
 section { max-width: var(--maxw); margin: 0 auto; padding: 84px 28px; }
-.section__title { font-size: clamp(26px, 3.4vw, 38px); letter-spacing: -.025em; margin: 0 0 14px; font-weight: 660; }
+.section__title { font-family: var(--display); font-size: clamp(26px, 3.4vw, 40px); letter-spacing: -.02em; margin: 0 0 14px; font-weight: 700; text-wrap: balance; }
 .section__lead { color: var(--ink-2); font-size: 16.5px; max-width: 40em; margin: 0 0 44px; }
 
 /* ── how ─────────────────────────────────────────────── */
@@ -306,8 +311,6 @@ section { max-width: var(--maxw); margin: 0 auto; padding: 84px 28px; }
 /* ── responsive ──────────────────────────────────────── */
 @media (max-width: 880px) {
   .hero { grid-template-columns: 1fr; gap: 40px; padding-bottom: 64px; }
-  .hero__stage { top: 0; bottom: auto; right: 0; left: 0; width: 100%; height: 420px; opacity: .5; }
-  .hero__copy::before { inset: -20px -30px; }
   .steps { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(2, 1fr); gap: 28px; }
   .nav__links a:not(.nav__gh):not([href="#install"]) { display: none; }
