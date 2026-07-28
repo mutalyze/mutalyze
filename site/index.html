@@ -19,17 +19,6 @@
 
   <header class="nav" data-hero>
     <a class="brand" href="#top" aria-label="mutalyze home">
-      <svg class="brand__mark" viewBox="0 0 24 32" width="21" height="28" aria-hidden="true"
-           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <path d="M6 2 C 19 6, 19 12, 6 16 C 19 20, 19 26, 6 30"/>
-        <path d="M18 2 C 5 6, 5 12, 18 16 C 5 20, 5 26, 18 30"/>
-        <g stroke-width="1.5" opacity=".85">
-          <line x1="8.5" y1="4.5" x2="15.5" y2="4.5"/>
-          <line x1="8.5" y1="11" x2="15.5" y2="11"/>
-          <line x1="8.5" y1="21" x2="15.5" y2="21"/>
-          <line x1="8.5" y1="27.5" x2="15.5" y2="27.5"/>
-        </g>
-      </svg>
       <span class="brand__word">mutalyze</span>
     </a>
     <nav class="nav__links">
@@ -87,6 +76,19 @@
       </div>
     </section>
 
+    <!-- ── INSTALL ──────────────────────────────────────────── -->
+    <section id="install" class="install">
+      <h2 class="section__title reveal">Point it at a session.</h2>
+      <div class="cmdbox reveal screen">
+        <code id="install-cmd">pip install git+https://github.com/mutalyze/mutalyze</code>
+        <button class="copy" data-copy="pip install git+https://github.com/mutalyze/mutalyze" aria-label="Copy install command">copy</button>
+      </div>
+      <div class="cmdbox cmdbox--sub reveal screen">
+        <code>mutalyze check          <span class="r-dim"># audit the newest session for this repo</span></code>
+      </div>
+      <p class="install__note reveal">PyYAML is the only dependency. MIT licensed. Runs entirely on your machine.</p>
+    </section>
+
     <!-- ── HOW IT WORKS ─────────────────────────────────────── -->
     <section id="how" class="how">
       <h2 class="section__title reveal">Three files. One comparison.</h2>
@@ -140,19 +142,6 @@
       <div class="stat reveal"><span class="stat__num" data-count="55" data-suffix="/55">0</span><span class="stat__label">flagged violations verified real</span></div>
       <div class="stat reveal"><span class="stat__num" data-count="0">0</span><span class="stat__label">bytes of code sent off your machine</span></div>
       <div class="stat reveal"><span class="stat__num" data-count="1">0</span><span class="stat__label">dependency to install (just PyYAML)</span></div>
-    </section>
-
-    <!-- ── INSTALL ──────────────────────────────────────────── -->
-    <section id="install" class="install">
-      <h2 class="section__title reveal">Point it at a session.</h2>
-      <div class="cmdbox reveal screen">
-        <code id="install-cmd">pip install git+https://github.com/mutalyze/mutalyze</code>
-        <button class="copy" data-copy="pip install git+https://github.com/mutalyze/mutalyze" aria-label="Copy install command">copy</button>
-      </div>
-      <div class="cmdbox cmdbox--sub reveal screen">
-        <code>mutalyze check          <span class="r-dim"># audit the newest session for this repo</span></code>
-      </div>
-      <p class="install__note reveal">PyYAML is the only dependency. MIT licensed. Runs entirely on your machine.</p>
     </section>
   </main>
 
