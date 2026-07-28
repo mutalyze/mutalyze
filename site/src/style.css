@@ -118,9 +118,17 @@ code { font-family: var(--mono); }
   display: grid;
   grid-template-columns: 1.05fr .95fr;
   gap: 54px;
-  align-items: center;
+  align-items: start;
   position: relative;
 }
+.hero__right { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.hero__install { display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 2; }
+.hero__install-label {
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .18em;
+  color: var(--toxic-2); margin: 6px 0 0;
+}
+.hero__install .cmdbox { max-width: none; margin: 0; }
+.hero__install .install__note { margin: 4px 0 0; text-align: left; }
 .hero__copy { position: relative; z-index: 2; }
 .hero .console { position: relative; z-index: 2; }
 .eyebrow {

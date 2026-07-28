@@ -83,7 +83,8 @@ function playHero() {
     .add('.hero__sub', { opacity: [0, 1], translateY: [16, 0] }, '-=380')
     .add('.hero__cta', { opacity: [0, 1], translateY: [16, 0] }, '-=520')
     .add('.legend', { opacity: [0, 1], translateY: [12, 0] }, '-=520')
-    .add('.console', { opacity: [0, 1], translateY: [26, 0], scale: [0.97, 1], duration: 820 }, '-=760');
+    .add('.console', { opacity: [0, 1], translateY: [26, 0], scale: [0.97, 1], duration: 820 }, '-=760')
+    .add('.hero__install', { opacity: [0, 1], translateY: [18, 0], duration: 560 }, '-=520');
 
   tl.then(() => startMutationCycle());
 }

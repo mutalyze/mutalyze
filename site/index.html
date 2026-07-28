@@ -53,40 +53,41 @@
         </div>
       </div>
 
-      <!-- the mutation console: the anime.js centerpiece -->
-      <div class="console screen" data-hero aria-label="Example: a mutation being caught">
-        <div class="console__bar">
-          <span class="console__dots"><i></i><i></i><i></i></span>
-          <span class="console__file">session · src/checkout.ts</span>
-          <span class="console__live">watching</span>
-        </div>
-        <div class="console__body">
-          <div class="line line--dim">● Read&nbsp;&nbsp;src/checkout.ts</div>
-          <div class="line line--dim">● Edit&nbsp;&nbsp;src/checkout.ts</div>
-          <div class="line line--call">
-            <span class="tool" data-tool>Bash</span>
-            <span class="cmd" data-mutate>&nbsp;</span>
+      <!-- right column: mutation console + install, stacked -->
+      <div class="hero__right">
+        <div class="console screen" data-hero aria-label="Example: a mutation being caught">
+          <div class="console__bar">
+            <span class="console__dots"><i></i><i></i><i></i></span>
+            <span class="console__file">session · src/checkout.ts</span>
+            <span class="console__live">watching</span>
           </div>
-          <div class="verdict" data-verdict hidden>
-            <span class="verdict__turn" data-turn></span>
-            <span class="verdict__code" data-code></span>
-            <span class="verdict__rule" data-rule></span>
+          <div class="console__body">
+            <div class="line line--dim">● Read&nbsp;&nbsp;src/checkout.ts</div>
+            <div class="line line--dim">● Edit&nbsp;&nbsp;src/checkout.ts</div>
+            <div class="line line--call">
+              <span class="tool" data-tool>Bash</span>
+              <span class="cmd" data-mutate>&nbsp;</span>
+            </div>
+            <div class="verdict" data-verdict hidden>
+              <span class="verdict__turn" data-turn></span>
+              <span class="verdict__code" data-code></span>
+              <span class="verdict__rule" data-rule></span>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- ── INSTALL ──────────────────────────────────────────── -->
-    <section id="install" class="install">
-      <h2 class="section__title reveal">Point it at a session.</h2>
-      <div class="cmdbox reveal screen">
-        <code id="install-cmd">pip install git+https://github.com/mutalyze/mutalyze</code>
-        <button class="copy" data-copy="pip install git+https://github.com/mutalyze/mutalyze" aria-label="Copy install command">copy</button>
+        <div id="install" class="hero__install" data-hero>
+          <p class="hero__install-label">INSTALL</p>
+          <div class="cmdbox screen">
+            <code id="install-cmd">pip install git+https://github.com/mutalyze/mutalyze</code>
+            <button class="copy" data-copy="pip install git+https://github.com/mutalyze/mutalyze" aria-label="Copy install command">copy</button>
+          </div>
+          <div class="cmdbox cmdbox--sub screen">
+            <code>mutalyze check  <span class="r-dim"># newest session for this repo</span></code>
+          </div>
+          <p class="install__note">PyYAML is the only dependency. MIT · runs entirely on your machine.</p>
+        </div>
       </div>
-      <div class="cmdbox cmdbox--sub reveal screen">
-        <code>mutalyze check          <span class="r-dim"># audit the newest session for this repo</span></code>
-      </div>
-      <p class="install__note reveal">PyYAML is the only dependency. MIT licensed. Runs entirely on your machine.</p>
     </section>
 
     <!-- ── HOW IT WORKS ─────────────────────────────────────── -->
