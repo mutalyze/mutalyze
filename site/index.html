@@ -24,6 +24,7 @@
     <nav class="nav__links">
       <a href="#how">How it works</a>
       <a href="#proof">The proof</a>
+      <a href="#memory">Rule memory</a>
       <a href="#install">Install</a>
       <a class="nav__gh" href="https://github.com/mutalyze/mutalyze" target="_blank" rel="noopener">GitHub ↗</a>
     </nav>
@@ -41,6 +42,11 @@
           transcript and flags every mutation that breaks your <code>CLAUDE.md</code>
           rules — which rule, which turn, with the exact command or edit that proves it.
           No language model decides.
+        </p>
+        <p class="hero__sub hero__sub--second" data-hero>
+          Then it makes those rules <strong>stick</strong>: it finds the rules you only ever
+          said in chat, keeps them in one store across projects, and puts the relevant ones
+          back in front of the agent when a long session gets compacted.
         </p>
         <div class="hero__cta" data-hero>
           <a class="btn btn--primary" href="#install">Get started</a>
@@ -83,7 +89,8 @@
             <button class="copy" data-copy="pip install git+https://github.com/mutalyze/mutalyze" aria-label="Copy install command">copy</button>
           </div>
           <div class="cmdbox cmdbox--sub screen">
-            <code>mutalyze check  <span class="r-dim"># newest session for this repo</span></code>
+            <code>mutalyze check      <span class="r-dim"># audit the newest session</span><br />
+mutalyze rules mine  <span class="r-dim"># rules you never wrote down</span></code>
           </div>
           <p class="install__note">PyYAML is the only dependency. MIT · runs entirely on your machine.</p>
         </div>
@@ -135,6 +142,51 @@
 
 <span class="r-label r-held">HELD (7 rules, no violations)</span>
   <span class="r-dim">turn 8      git push origin feature/checkout   — not a force-push, not main</span></code></pre>
+    </section>
+
+    <!-- ── RULE MEMORY ──────────────────────────────────────── -->
+    <section id="memory" class="how">
+      <h2 class="section__title reveal">Rules the next session still knows.</h2>
+      <p class="section__lead reveal">
+        A rules file is read once, at the start, in one repo. Half your real rules were never
+        written down at all — you typed them at the agent mid-session and they died with the
+        conversation. mutalyze closes that loop, and every step is yours to approve.
+      </p>
+      <ol class="steps">
+        <li class="step reveal screen">
+          <span class="step__n">FIND</span>
+          <h3>Rules you never wrote down</h3>
+          <p><code>rules mine</code> reads your past sessions for instructions you gave in chat,
+          cites the session and line, and ranks them by how often you repeated yourself. It
+          reads only your messages — never the agent's.</p>
+        </li>
+        <li class="step reveal screen">
+          <span class="step__n">KEEP</span>
+          <h3>One store, stackable</h3>
+          <p>Approved rules live in a store that outlives the repo, grouped into bundles you
+          stack — a <code>base</code> set plus a per-project overlay. Duplicates and
+          contradictions are flagged, never silently resolved.</p>
+        </li>
+        <li class="step reveal screen">
+          <span class="step__n">HOLD</span>
+          <h3>Survives compaction</h3>
+          <p>When a long session gets squeezed and the rules fall out of context,
+          <code>context</code> puts back the ones that matter — ranked against what the agent
+          just touched and what you asked for.</p>
+        </li>
+      </ol>
+
+      <pre class="report report--spaced reveal screen"><code><span class="r-dim">$ mutalyze rules mine</span>
+<span class="r-head">Scanned 9 session(s) for rules you stated in chat.</span>
+<span class="r-dim">  4 already covered by your rules file or store.</span>
+
+<span class="r-label r-held">PROPOSED (2 — nothing has been added)</span>
+  <span class="r-reveal">[1] always use <code>rg</code> (not <code>grep</code>) when searching   ×3
+      check:command · 81e6e408.jsonl:412</span>
+  <span class="r-reveal">[2] never commit directly to main
+      check:command · 4b21c7f0.jsonl:88</span>
+
+<span class="r-dim">Add them with:  mutalyze rules mine --only 1,2</span></code></pre>
     </section>
 
     <!-- ── STATS ────────────────────────────────────────────── -->

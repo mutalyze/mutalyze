@@ -147,7 +147,10 @@ code { font-family: var(--mono); }
 }
 .hero__title .word { display: inline-block; white-space: nowrap; }
 .hero__title .ch { display: inline-block; white-space: pre; will-change: transform, opacity; }
-.hero__sub { font-size: 17px; color: var(--ink-2); max-width: 33em; margin: 0 0 28px; }
+.hero__sub { font-size: 17px; color: var(--ink-2); max-width: 33em; margin: 0 0 18px; }
+/* second paragraph carries the memory half of the story — present, not shouting */
+.hero__sub--second { font-size: 15.5px; color: var(--muted); margin: 0 0 28px; }
+.hero__sub--second strong { color: var(--ink-2); }
 .hero__sub code { color: var(--toxic); background: var(--toxic-dim); padding: .05em .4em; border-radius: 5px; font-size: .9em; }
 .hero__sub strong { color: var(--ink); font-weight: 650; }
 
@@ -255,6 +258,7 @@ section { max-width: var(--maxw); margin: 0 auto; padding: 84px 28px; }
   box-shadow: 0 30px 80px -40px rgba(0,0,0,.8);
 }
 .report code { font-family: inherit; }
+.report--spaced { margin-top: 26px; }
 .report .r-head { color: var(--ink); }
 .report .r-dim { color: var(--faint); }
 .report .r-label { display: inline-block; margin: 6px 0; letter-spacing: .04em; }
