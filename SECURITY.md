@@ -6,7 +6,7 @@ Please report suspected security issues **privately** — do not open a public i
 
 - Preferred: open a private advisory at
   <https://github.com/mutalyze/mutalyze/security/advisories/new>
-- Or email: `[SECURITY CONTACT EMAIL]`
+- Or email: `307315485+mutalyze@users.noreply.github.com`
 
 We aim to acknowledge reports within a few business days and to share a
 remediation timeline after triage.

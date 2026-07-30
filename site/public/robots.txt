@@ -1,4 +1,4 @@
-# mutalyze — https://[YOUR DOMAIN]
+# mutalyze — https://mutalyze.vercel.app
 User-agent: *
 Allow: /
 
