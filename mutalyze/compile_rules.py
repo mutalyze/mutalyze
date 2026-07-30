@@ -80,32 +80,75 @@ _STRONG = ["must", "never", "always", "do not", "don't", "avoid", "forbidden", "
 _DESCRIPTIVE_RE = re.compile(r"^\s*`[^`]+`\s*[-—:]")
 
 
+def _accept_candidate(raw: str, out: List[str]) -> None:
+    """Apply the keep/drop heuristics to one assembled bullet body."""
+    body = re.sub(r"\s+", " ", raw).strip()
+    if not (12 <= len(body) <= 300):
+        return
+    low = body.lower()
+    # Ordering rules ("read a file before editing it") often carry no
+    # normative verb, so also keep lines that express a "before" sequence.
+    if not any(tok in low for tok in _NORMATIVE) and " before " not in low:
+        return
+    # Drop descriptive "`thing` — description" lines unless a strong verb
+    # makes them genuinely prescriptive.
+    if _DESCRIPTIVE_RE.match(body) and not any(s in low for s in _STRONG):
+        return
+    out.append(body)
+
+
 def extract_candidates(text: str) -> List[str]:
-    """Return the bullet/numbered lines that carry a normative token."""
+    """Return the bullet/numbered rules, each joined across its wrapped lines.
+
+    A rule authored across two lines —
+
+        - Phase 2 (`execute.py`) must never call an LLM or the network. Every
+          violation stays deterministic and citable.
+
+    is one rule, not half a rule. Indented continuation lines are folded into
+    the bullet before the heuristics run; truncating at the newline used to cut
+    rules mid-sentence, which then reached the classifier (and the rule store)
+    as fragments. Continuations must be *indented* — unindented prose after a
+    list stays a separate paragraph, so following text is never swallowed.
+    """
     out: List[str] = []
     in_fence = False
+    buf: Optional[str] = None
+
     for line in text.splitlines():
         if _FENCE_RE.match(line):
+            if buf is not None:
+                _accept_candidate(buf, out)
+                buf = None
             in_fence = not in_fence
             continue
         if in_fence:
             continue
+
         m = _BULLET_RE.match(line)
-        if not m:
+        if m:
+            if buf is not None:
+                _accept_candidate(buf, out)
+            buf = m.group(1).strip()  # a nested bullet is its own rule, not a continuation
             continue
-        body = m.group(1).strip()
-        if not (12 <= len(body) <= 300):
+
+        stripped = line.strip()
+        is_continuation = (
+            buf is not None
+            and stripped
+            and line[:1].isspace()          # indented → belongs to the bullet
+            and not stripped.startswith("#")
+        )
+        if is_continuation:
+            buf = "%s %s" % (buf, stripped)
             continue
-        low = body.lower()
-        # Ordering rules ("read a file before editing it") often carry no
-        # normative verb, so also keep lines that express a "before" sequence.
-        if not any(tok in low for tok in _NORMATIVE) and " before " not in low:
-            continue
-        # Drop descriptive "`thing` — description" lines unless a strong verb
-        # makes them genuinely prescriptive.
-        if _DESCRIPTIVE_RE.match(body) and not any(s in low for s in _STRONG):
-            continue
-        out.append(body)
+
+        if buf is not None:
+            _accept_candidate(buf, out)
+            buf = None
+
+    if buf is not None:
+        _accept_candidate(buf, out)
     return out
 
 
