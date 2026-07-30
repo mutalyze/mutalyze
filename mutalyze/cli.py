@@ -369,6 +369,211 @@ def _warn_compose(result) -> None:
         _err("  Conflicting rules were BOTH kept — resolve them in the store.")
 
 
+def cmd_rules_mine(args: argparse.Namespace) -> int:
+    """Propose rules you stated in chat but never wrote down. Writes nothing
+    unless the user explicitly approves with --apply/--only."""
+    from .discover import list_sessions
+    from .mine import known_rule_keys, mine_sessions
+    from .store import add_rule, load_store, save_store
+
+    repo_root = os.path.abspath(args.repo) if args.repo else find_repo_root(os.getcwd())
+    sessions = list_sessions(repo_root)
+    if not sessions:
+        _err("ERROR  No session transcripts found for this repo.\n"
+             "       Looked in: %s" % project_transcript_dir(repo_root))
+        return 2
+    if args.sessions > 0:
+        sessions = sessions[: args.sessions]
+
+    store = load_store()
+    known = known_rule_keys(repo_root, [r.text for r in store.rules])
+    result = mine_sessions(sessions, known=known)
+
+    shown = [p for p in result.proposals if args.all or p.checkable]
+    _out("Scanned %d session(s) for rules you stated in chat." % result.sessions_scanned)
+    _out("  %d already covered by your rules file or store." % result.already_known)
+    if not shown:
+        hidden = len(result.proposals)
+        if hidden and not args.all:
+            _out("  %d candidate(s) found, none mechanically checkable — see them with --all."
+                 % hidden)
+        else:
+            _out("  Nothing new proposed.")
+        return 0
+
+    _out("")
+    _out("PROPOSED (%d — nothing has been added)" % len(shown))
+    for i, p in enumerate(shown, start=1):
+        tag = "check:%s" % p.check_type if p.checkable else "unsupported"
+        seen = "" if p.count == 1 else "  ×%d" % p.count
+        _out("  [%d] %s%s" % (i, p.text, seen))
+        _out("      %s · %s" % (tag, p.cite()))
+        if not p.checkable and args.verbose:
+            _out("      why: %s" % p.reason)
+
+    selected: List[int] = []
+    if args.only:
+        for part in args.only.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if not part.isdigit() or not (1 <= int(part) <= len(shown)):
+                _err("ERROR  --only: '%s' is not one of the listed numbers (1-%d)"
+                     % (part, len(shown)))
+                return 2
+            selected.append(int(part))
+    elif args.apply:
+        selected = list(range(1, len(shown) + 1))
+
+    if not selected:
+        _out("")
+        _out("Add them with:  mutalyze rules mine --apply            (all)")
+        _out("                mutalyze rules mine --only 1,3         (some)")
+        return 0
+
+    added = 0
+    _out("")
+    _out("ADDING to bundle '%s'" % args.bundle)
+    for idx in selected:
+        p = shown[idx - 1]
+        rule, reason = add_rule(store, p.text, bundle=args.bundle,
+                               source="mined:%s" % (p.citations[0][0] if p.citations else "chat"))
+        if rule is None:
+            _out("  skip [%d] %s" % (idx, reason))
+            continue
+        added += 1
+        _out("  %s  %s" % (rule.id, rule.text))
+    if added:
+        save_store(store)
+        _out("")
+        _out("Stored %d rule(s) → %s" % (added, store.path))
+        _out("Compose them into a rules file:  mutalyze rules compose -o AGENTS.md")
+    return 0
+
+
+def cmd_context(args: argparse.Namespace) -> int:
+    """Print the rules worth re-asserting right now. This is what a hook calls
+    after a compaction, or when a new prompt arrives."""
+    from .context import build_reminder
+
+    repo_root = os.path.abspath(args.repo) if args.repo else find_repo_root(os.getcwd())
+    session = args.session
+    if session is None and not args.no_session:
+        session = newest_session(repo_root)  # may be None; relevance just degrades
+
+    reminder = build_reminder(
+        repo_root,
+        session=session,
+        prompt=args.relevant_to,
+        max_rules=args.max,
+        include_store=not args.no_store,
+        bundles=args.bundle or None,
+    )
+    if not reminder.rules:
+        _err("NOTE  No rules found to re-assert (no CLAUDE.md/AGENTS.md and an empty store).")
+        return 0
+
+    if args.format == "json":
+        sys.stdout.write(reminder.as_json() + "\n")
+    elif args.format == "claude-hook":
+        sys.stdout.write(reminder.as_claude_hook(event=args.hook_event) + "\n")
+    else:
+        sys.stdout.write(reminder.as_markdown())
+
+    if args.explain:
+        _err("")
+        _err("relevance (highest first):")
+        for s in reminder.rules:
+            why = "; ".join(s.reasons) if s.reasons else "no current signal — included as context"
+            _err("  %2d  %s" % (s.score, _clip(s.text, 60)))
+            _err("      %s" % why)
+        if reminder.dropped:
+            _err("  %d rule(s) trimmed by --max %d" % (reminder.dropped, args.max))
+    return 0
+
+
+# The hook wiring below is intentionally small and inspectable: mutalyze prints
+# the rules, the agent's own hook system decides when to ask. `hook print` shows
+# the config; `hook install` merges it into the repo's .claude/settings.json.
+_HOOK_EVENTS = ("SessionStart", "PreCompact", "UserPromptSubmit")
+
+
+def _hook_config(repo_root: str) -> dict:
+    cmd = "mutalyze context --repo %s --format claude-hook --hook-event" % repo_root
+    return {
+        event: [{"hooks": [{"type": "command", "command": "%s %s" % (cmd, event)}]}]
+        for event in _HOOK_EVENTS
+    }
+
+
+def cmd_hook(args: argparse.Namespace) -> int:
+    import json as _json
+
+    repo_root = os.path.abspath(args.repo) if args.repo else find_repo_root(os.getcwd())
+    config = _hook_config(repo_root)
+
+    if args.hook_command == "print" or not args.install:
+        _out("Add this to .claude/settings.json (or run `mutalyze hook install`):")
+        _out("")
+        sys.stdout.write(_json.dumps({"hooks": config}, indent=2) + "\n")
+        _out("")
+        _out("SessionStart      → rules are present from turn one")
+        _out("PreCompact        → rules are restated as the window is squeezed")
+        _out("UserPromptSubmit  → the rules relevant to what you just asked")
+        _err("NOTE  Verify against your Claude Code version — hook event names and "
+             "context injection\n      differ between releases. `mutalyze context` works "
+             "standalone in any tool.")
+        return 0
+
+    settings_path = os.path.join(repo_root, ".claude", "settings.json")
+    existing: dict = {}
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path, "r", encoding="utf-8") as fh:
+                loaded = _json.load(fh)
+            if isinstance(loaded, dict):
+                existing = loaded
+        except (OSError, ValueError) as err:
+            _err("ERROR  %s exists but could not be parsed (%s).\n"
+                 "       Fix or move it, then re-run." % (settings_path, err))
+            return 2
+        backup = settings_path + ".mutalyze-backup"
+        with open(backup, "w", encoding="utf-8") as fh:
+            _json.dump(existing, fh, indent=2)
+        _out("Backed up existing settings → %s" % backup)
+
+    hooks = existing.get("hooks")
+    if not isinstance(hooks, dict):
+        hooks = {}
+    added, skipped = [], []
+    for event, entries in config.items():
+        current = hooks.get(event)
+        if not isinstance(current, list):
+            current = []
+        already = any("mutalyze context" in _json.dumps(item) for item in current)
+        if already:
+            skipped.append(event)
+            continue
+        current.extend(entries)
+        hooks[event] = current
+        added.append(event)
+    existing["hooks"] = hooks
+
+    os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+    with open(settings_path, "w", encoding="utf-8") as fh:
+        _json.dump(existing, fh, indent=2)
+        fh.write("\n")
+
+    _out("Wrote %s" % settings_path)
+    if added:
+        _out("  added hooks: %s" % ", ".join(added))
+    if skipped:
+        _out("  already present, left alone: %s" % ", ".join(skipped))
+    _out("")
+    _out("Restart the session (or start a new one) for the hooks to take effect.")
+    return 0
+
+
 def _print_help(parser: argparse.ArgumentParser) -> int:
     parser.print_help()
     return 0
@@ -440,6 +645,19 @@ def build_parser() -> argparse.ArgumentParser:
     rr.add_argument("id", help="rule id (or an unambiguous prefix)")
     rr.set_defaults(func=cmd_rules_rm)
 
+    rm_ = rsub.add_parser("mine", help="propose rules you stated in chat but never wrote down")
+    rm_.add_argument("--repo", help="repo root (default: nearest .git above cwd)")
+    rm_.add_argument("--sessions", type=int, default=10,
+                     help="how many recent sessions to scan, newest first (0 = all)")
+    rm_.add_argument("--bundle", default=STORE_DEFAULT_BUNDLE,
+                     help="bundle to add approved rules to (default: %s)" % STORE_DEFAULT_BUNDLE)
+    rm_.add_argument("--all", action="store_true",
+                     help="also show candidates mutalyze cannot mechanically check")
+    rm_.add_argument("--apply", action="store_true", help="add every proposal shown")
+    rm_.add_argument("--only", help="add just these listed numbers, e.g. 1,3,5")
+    rm_.add_argument("--verbose", action="store_true", help="explain why a rule isn't checkable")
+    rm_.set_defaults(func=cmd_rules_mine)
+
     rc = rsub.add_parser("compose", help="stack bundles into one rules file an agent will auto-load")
     rc.add_argument("--bundle", action="append",
                     help="bundle to include, repeatable — order is precedence (default: all)")
@@ -448,6 +666,35 @@ def build_parser() -> argparse.ArgumentParser:
     rc.add_argument("--force", action="store_true",
                     help="overwrite an output file mutalyze did not generate")
     rc.set_defaults(func=cmd_rules_compose)
+
+    # -- context: re-assert the rules that matter right now -----------------
+    x = sub.add_parser("context",
+                       help="print the rules worth re-asserting now (for a compaction hook)")
+    x.add_argument("--repo", help="repo root (default: nearest .git above cwd)")
+    x.add_argument("--session", help="transcript to read recent activity from "
+                                     "(default: newest for this repo)")
+    x.add_argument("--no-session", action="store_true",
+                   help="ignore session activity; rank on --relevant-to only")
+    x.add_argument("--relevant-to", metavar="TEXT",
+                   help="the task you're starting — rank rules against it")
+    x.add_argument("--max", type=int, default=12,
+                   help="most rules to emit, highest-relevance first (0 = all)")
+    x.add_argument("--bundle", action="append", help="limit store rules to these bundles")
+    x.add_argument("--no-store", action="store_true", help="use the rules file only")
+    x.add_argument("--format", choices=("md", "json", "claude-hook"), default="md",
+                   help="md (default, works anywhere), json, or a Claude Code hook envelope")
+    x.add_argument("--hook-event", default="UserPromptSubmit",
+                   help="event name to stamp into --format claude-hook output")
+    x.add_argument("--explain", action="store_true",
+                   help="show why each rule was ranked where it was (stderr)")
+    x.set_defaults(func=cmd_context)
+
+    h = sub.add_parser("hook", help="wire `mutalyze context` into your agent's hooks")
+    h.add_argument("hook_command", nargs="?", choices=("print", "install"), default="print")
+    h.add_argument("--repo", help="repo root (default: nearest .git above cwd)")
+    h.add_argument("--install", action="store_true",
+                   help="write into .claude/settings.json (backs up any existing file)")
+    h.set_defaults(func=cmd_hook)
 
     return p
 
