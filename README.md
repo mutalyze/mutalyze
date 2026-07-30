@@ -10,6 +10,14 @@ record of what an agent did is the JSONL log Claude Code writes to disk. Your ru
 are in one file (`CLAUDE.md` or `AGENTS.md`), while the agent's behavior is in another.
 mutalyze reads both and compares them.
 
+It also works the other direction. A rules file is read once, at the start, in one
+repo — and half your real rules were never written down at all: you typed them at
+the agent mid-session and they died with the conversation. So mutalyze reads your
+past transcripts for the rules you *stated* but never saved, keeps them in a store
+that outlives the repo, and puts the relevant ones back in front of the agent when
+a long session gets compacted. See [Rule memory](#rule-memory). Every step of that
+is yours to approve; nothing is written or applied on its own.
+
 ## Install
 
 ```bash
@@ -25,6 +33,10 @@ mutalyze check path/to.jsonl   # a specific transcript
 mutalyze check --json          # machine-readable
 mutalyze check --verbose       # list held and unsupported rules
 mutalyze check --recompile     # re-run rule compilation
+
+mutalyze rules mine            # rules you stated in chat but never wrote down
+mutalyze rules compose -o AGENTS.md   # stack your rule bundles into a rules file
+mutalyze context               # the rules worth re-asserting right now
 ```
 
 Mutalyze finds the most recent Claude Code session for the current directory, compiles
@@ -102,6 +114,73 @@ config and no change to `~/.claude/settings.json`, and it runs the same checks
 as `check`. The cost of not using a hook: permission-denied tool calls never
 reach the transcript, so watch mode can't see them. It only reports but it never
 blocks the agent or changes what it does.
+
+## Rule memory
+
+Auditing tells you a rule was broken. This half tries to stop it being forgotten in
+the first place. Three commands, one loop, and you approve every step:
+
+```bash
+mutalyze rules mine                       # 1. find rules you only ever said in chat
+mutalyze rules import --bundle base       #    (or seed the store from an existing rules file)
+mutalyze rules compose -o AGENTS.md       # 2. stack bundles into a file any agent auto-loads
+mutalyze context                          # 3. re-assert the relevant ones after a compaction
+```
+
+**1. Find the unwritten rules.** `rules mine` reads your past sessions for
+instructions you gave in chat, and proposes the ones that aren't already written
+down. It reads only *your* messages — assistant turns, tool results, and
+harness-injected text are excluded, because a rule the agent proposed is not a rule
+you set. Each proposal cites `session:line` so you can go read what you actually
+said, and repeats are counted, because restating a rule four times is signal.
+
+```
+$ mutalyze rules mine
+Scanned 9 session(s) for rules you stated in chat.
+  4 already covered by your rules file or store.
+
+PROPOSED (2 — nothing has been added)
+  [1] always use `rg` (not `grep`) when searching   ×3
+      check:command · 81e6e408.jsonl:412
+  [2] never commit directly to main
+      check:command · 4b21c7f0.jsonl:88
+
+Add them with:  mutalyze rules mine --apply            (all)
+                mutalyze rules mine --only 1,3         (some)
+```
+
+**2. Keep them somewhere that outlives the repo.** Approved rules go into a store
+(`~/.mutalyze/rules.yaml`, hand-editable) grouped into **bundles** you stack — a
+`base` set plus a per-project overlay. `compose` merges them, in the order you name
+them, into an ordinary Markdown rules file that every compliant agent auto-loads.
+Duplicates collapse and contradictions are flagged (`` `rg`: R004 endorses it, R012
+forbids it ``) — both rules are kept, because resolving your intent is not this
+tool's call. Composed output is the same bullet shape Phase 1 reads back, so a
+composed file is auditable by `mutalyze check` with no special handling.
+
+**3. Survive compaction.** When a long session is squeezed to fit the context
+window, the rules file is the first thing to fall out — it was read once, hundreds
+of turns ago. `mutalyze context` prints what's worth re-asserting, ranked by
+relevance computed from each compiled check's own scope (`applies_to` globs,
+forbidden command tokens, an ordering trigger) against what the agent just did
+and/or the prompt you opened with. That's arithmetic, not judgment: no LLM is
+involved.
+
+```bash
+mutalyze context --relevant-to "search the codebase for TODOs"   # rank against a task
+mutalyze context --max 0                                          # re-assert everything
+mutalyze hook print                                               # config for your agent
+mutalyze hook install                                             # write it (backs up first)
+```
+
+Ranking only decides what to **trim**: when every rule fits the budget they are all
+re-asserted, and a trim is always reported rather than silently applied. Output is
+Markdown by default so it's useful in any agent; `--format json` and a Claude Code
+hook envelope are also available.
+
+One honest caveat on the hook: event names and how context is injected differ
+between Claude Code releases, so `hook print` tells you to verify the wiring.
+`mutalyze context` works standalone regardless — you can pipe it anywhere.
 
 ## Related tools
 
@@ -263,9 +342,25 @@ and `unsupported` counts, not just the violation count.
   never touched the checked surface. Read the header counts.
 - Command location is best-effort. A command whose directory comes from a shell
   variable is reported `unresolved`, not violated.
-- This is one harness (Claude Code) and detection only. Drift over time, live
-  re-injection through hooks, and team aggregation are out until the detector
-  proves useful on real rule-governed sessions.
+- This is one harness (Claude Code). Transcript reading is Claude-Code-specific,
+  so mining reads only its logs today; the *output* side is portable, since
+  `compose` writes a plain `AGENTS.md` that any compliant agent loads. Drift over
+  time and team aggregation are still out.
+- Mining leans strict, and misses on purpose. A rule stated vaguely, spread across
+  several sentences, or implied by a correction rather than said outright will not
+  be proposed — a junk proposal costs more trust than a missed one. Expect to still
+  write some rules by hand.
+- Conflict detection is narrow. It flags only an explicit endorse-versus-forbid on
+  the same token. Two rules that contradict each other in prose, without a shared
+  backticked token, are not detected.
+- Relevance ranking is scope matching, not comprehension. It knows a rule mentions
+  `*.ts` or forbids `grep`; it does not know your task. A rule with no compiled
+  scope falls back to keyword overlap, and with no signal at all everything simply
+  keeps its place in line.
+- Re-injection depends on your agent's hooks. mutalyze can compute and print the
+  rules, but it cannot push them into a running conversation by itself, and hook
+  behavior varies by release. It reports and supplies context; it never blocks the
+  agent.
 
 ## Validation
 
@@ -281,4 +376,13 @@ On the 10,420-line session with four compactions, a naïve `parentUuid`-only tra
 ./.venv/bin/python tests/make_fixture.py            # labeled fixture: every check type, plus false-alarm guards
 ./.venv/bin/python tests/test_safety_pack.py        # safety pack both directions: 24 real dangers, 26 look-alikes
 ./.venv/bin/python tests/sweep_parser_robustness.py # parser over the longest local sessions (naive vs bridged coverage)
+./.venv/bin/python tests/test_store.py              # rule store: bundles, dedupe, conflicts, compose round-trip
+./.venv/bin/python tests/test_mine.py               # mining: human-only extraction, precision filters, citations
+./.venv/bin/python tests/test_context.py            # relevance ranking, budget trimming, compaction detection
 ```
+
+**Rule memory is not yet validated on other people's sessions.** The store, mining,
+and relevance ranking are covered by the test suites above and were exercised on
+this machine's real transcripts, but the number that would matter — how many useful
+rules mining recovers from a stranger's sessions, and whether re-assertion changes
+agent behavior — needs users. It is a launch dependency, not a local one.
