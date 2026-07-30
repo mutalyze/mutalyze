@@ -19,6 +19,7 @@ from .discover import (
 from .execute import execute
 from .report import render_json, render_text
 from .safety_pack import builtin_checks
+from .store import DEFAULT_BUNDLE as STORE_DEFAULT_BUNDLE
 from .transcript import Transcript
 
 MIN_CHECKS = 5
@@ -213,6 +214,171 @@ def cmd_watch(args: argparse.Namespace) -> int:
     return watcher.run_live(tdir, args.session)
 
 
+def _out(msg: str = "") -> None:
+    sys.stdout.write(msg.rstrip("\n") + "\n")
+
+
+def cmd_rules_import(args: argparse.Namespace) -> int:
+    from .store import import_rules_file, load_store, save_store
+
+    store = load_store()
+    target = args.path or (args.repo or find_repo_root(os.getcwd()))
+    result, err = import_rules_file(store, target, bundle=args.bundle)
+    if err is not None:
+        _err("ERROR  %s" % err)
+        return 2
+    if result is None or (not result.added and not result.skipped):
+        _err("NOTE  No normative rule lines found in %s" % target)
+        return 0
+
+    save_store(store)
+    _out("Imported from %s" % result.source)
+    _out("  bundle: %s   →  %s" % (args.bundle, store.path))
+    if result.added:
+        _out("")
+        _out("ADDED (%d)" % len(result.added))
+        for rule in result.added:
+            _out("  %s  %s" % (rule.id, rule.text))
+    if result.skipped:
+        _out("")
+        _out("SKIPPED (%d — already stored)" % len(result.skipped))
+        for text, reason in result.skipped:
+            _out("  %s  (%s)" % (_clip(text), reason))
+    return 0
+
+
+def cmd_rules_list(args: argparse.Namespace) -> int:
+    from .store import checkability, find_conflicts, find_duplicates, load_store
+
+    store = load_store()
+    rules = store.in_bundle(args.bundle) if args.bundle else store.rules
+    if not rules:
+        where = "bundle '%s'" % args.bundle if args.bundle else store.path
+        _err("NOTE  No rules stored in %s\n"
+             "      Import some:  mutalyze rules import" % where)
+        return 0
+
+    _out("Store: %s" % store.path)
+    _out("Rules: %d in %d bundle(s)" % (len(rules), len({r.bundle for r in rules})))
+    for bundle in (b for b in store.bundles() if not args.bundle or b == args.bundle):
+        in_b = [r for r in rules if r.bundle == bundle]
+        if not in_b:
+            continue
+        _out("")
+        _out("[%s]" % bundle)
+        for rule in in_b:
+            ok, detail = checkability(rule.text)
+            mark = "check:%s" % detail if ok else "unsupported"
+            flag = "" if rule.status == "active" else " (%s)" % rule.status
+            _out("  %s  %s%s" % (rule.id, rule.text, flag))
+            if args.verbose:
+                _out("        %s" % mark)
+
+    dupes = find_duplicates(store.active())
+    conflicts = find_conflicts(store.active())
+    if dupes:
+        _out("")
+        _out("DUPLICATES (%d — same rule in more than one bundle)" % len(dupes))
+        for first, second in dupes:
+            _out("  %s ↔ %s  %s" % (first.id, second.id, _clip(second.text)))
+    if conflicts:
+        _out("")
+        _out("CONFLICTS (%d — flagged, never auto-resolved)" % len(conflicts))
+        for c in conflicts:
+            _out("  %s" % c.describe())
+    return 0
+
+
+def cmd_rules_add(args: argparse.Namespace) -> int:
+    from .store import add_rule, checkability, load_store, save_store
+
+    store = load_store()
+    rule, reason = add_rule(store, args.text, bundle=args.bundle, source="manual")
+    if rule is None:
+        _err("NOTE  Not added — %s" % reason)
+        return 0
+    save_store(store)
+    ok, detail = checkability(rule.text)
+    _out("Added %s to bundle '%s'" % (rule.id, rule.bundle))
+    _out("  %s" % rule.text)
+    _out("  %s" % ("mechanically checkable (%s)" % detail if ok
+                   else "not mechanically checkable — %s" % detail))
+    return 0
+
+
+def cmd_rules_rm(args: argparse.Namespace) -> int:
+    from .store import load_store, remove_rule, save_store
+
+    store = load_store()
+    rule = remove_rule(store, args.id)
+    if rule is None:
+        _err("ERROR  No rule matching '%s' (ambiguous prefixes are refused)" % args.id)
+        return 2
+    save_store(store)
+    _out("Removed %s from '%s'" % (rule.id, rule.bundle))
+    _out("  %s" % rule.text)
+    return 0
+
+
+def cmd_rules_compose(args: argparse.Namespace) -> int:
+    from .store import compose, is_generated, load_store
+
+    store = load_store()
+    if not store.rules:
+        _err("ERROR  The store is empty — nothing to compose.\n"
+             "       Import a rules file first:  mutalyze rules import")
+        return 3
+
+    missing = [b for b in (args.bundle or []) if not store.in_bundle(b)]
+    if missing:
+        _err("ERROR  No such bundle(s): %s\n"
+             "       Known bundles: %s" % (", ".join(missing), ", ".join(store.bundles())))
+        return 2
+
+    result = compose(store, bundles=args.bundle or None, title=args.title)
+
+    if not args.output:
+        sys.stdout.write(result.text)
+        _err("NOTE  %d rules from [%s]. Nothing written — pass -o FILE to write."
+             % (len(result.used), ", ".join(result.bundles)))
+        _warn_compose(result)
+        return 0
+
+    dest = os.path.abspath(os.path.expanduser(args.output))
+    if os.path.exists(dest) and not is_generated(dest) and not args.force:
+        _err("ERROR  %s exists and was not generated by mutalyze.\n"
+             "       Refusing to overwrite hand-written rules. Re-run with --force "
+             "to replace it,\n       or write elsewhere with -o." % dest)
+        return 2
+    with open(dest, "w", encoding="utf-8") as fh:
+        fh.write(result.text)
+    _out("Wrote %s" % dest)
+    _out("  %d rules from [%s]" % (len(result.used), ", ".join(result.bundles)))
+    _warn_compose(result)
+    return 0
+
+
+def _warn_compose(result) -> None:
+    """Duplicates and conflicts are surfaced, never silently applied."""
+    for first, second in result.duplicates:
+        _err("  dropped duplicate %s (already present as %s): %s"
+             % (second.id, first.id, _clip(second.text)))
+    for c in result.conflicts:
+        _err("  CONFLICT %s" % c.describe())
+    if result.conflicts:
+        _err("  Conflicting rules were BOTH kept — resolve them in the store.")
+
+
+def _print_help(parser: argparse.ArgumentParser) -> int:
+    parser.print_help()
+    return 0
+
+
+def _clip(text: str, width: int = 72) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="mutalyze",
@@ -245,6 +411,44 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--split-lines", action="store_true",
                    help="replay: write some lines in two writes, to exercise partial-line handling")
     w.set_defaults(func=cmd_watch)
+
+    # -- rules: the persistent, cross-project rule store --------------------
+    r = sub.add_parser("rules", help="manage the persistent rule store (import / list / compose)")
+    rsub = r.add_subparsers(dest="rules_command")
+    # bare `mutalyze rules` shows its own help rather than failing on a missing func
+    r.set_defaults(func=lambda _args, _p=r: _print_help(_p))
+
+    ri = rsub.add_parser("import", help="import rules from a CLAUDE.md / AGENTS.md into the store")
+    ri.add_argument("path", nargs="?", help="rules file or repo dir (default: this repo)")
+    ri.add_argument("--repo", help="repo root to import from")
+    ri.add_argument("--bundle", default=STORE_DEFAULT_BUNDLE,
+                    help="bundle to file these under (default: %s)" % STORE_DEFAULT_BUNDLE)
+    ri.set_defaults(func=cmd_rules_import)
+
+    rl = rsub.add_parser("list", help="list stored rules, with duplicate and conflict flags")
+    rl.add_argument("--bundle", help="only this bundle")
+    rl.add_argument("--verbose", action="store_true", help="show whether each rule is checkable")
+    rl.set_defaults(func=cmd_rules_list)
+
+    ra = rsub.add_parser("add", help="add one rule by hand")
+    ra.add_argument("text", help="the rule, as you'd write it in a rules file")
+    ra.add_argument("--bundle", default=STORE_DEFAULT_BUNDLE,
+                    help="bundle to add to (default: %s)" % STORE_DEFAULT_BUNDLE)
+    ra.set_defaults(func=cmd_rules_add)
+
+    rr = rsub.add_parser("rm", help="remove a rule by id")
+    rr.add_argument("id", help="rule id (or an unambiguous prefix)")
+    rr.set_defaults(func=cmd_rules_rm)
+
+    rc = rsub.add_parser("compose", help="stack bundles into one rules file an agent will auto-load")
+    rc.add_argument("--bundle", action="append",
+                    help="bundle to include, repeatable — order is precedence (default: all)")
+    rc.add_argument("-o", "--output", help="write to this file (default: stdout, writes nothing)")
+    rc.add_argument("--title", default="Project rules", help="H1 title for the composed file")
+    rc.add_argument("--force", action="store_true",
+                    help="overwrite an output file mutalyze did not generate")
+    rc.set_defaults(func=cmd_rules_compose)
+
     return p
 
 
