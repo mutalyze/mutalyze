@@ -14,7 +14,8 @@ from dataclasses import asdict, dataclass
 from typing import Dict, List, Optional, Tuple
 
 from .checks import COMMAND, CONTENT, ORDERING, Check
-from .code_strip import strip_code
+from .code_strip import is_prose_path, strip_code
+from .compile_rules import RULE_FILENAMES
 from .phases import PhaseSpan, build_phases, category, phase_at
 from .transcript import Transcript, ToolCall
 
@@ -76,6 +77,12 @@ def _safe_regex(pattern: str) -> Optional["re.Pattern"]:
 
 def _basename(path: Optional[str]) -> str:
     return os.path.basename(path) if path else ""
+
+
+def _is_rules_file(path: Optional[str]) -> bool:
+    """A rules file states the rules; quoting a forbidden token there is the rule
+    being written down, not the rule being broken."""
+    return _basename(path).lower() in {n.lower() for n in RULE_FILENAMES}
 
 
 def _under(path: Optional[str], root: Optional[str]) -> bool:
@@ -330,6 +337,15 @@ def execute(checks: List[Check], transcript: Transcript,
                 if c.scope != "session" and not in_repo:
                     continue
                 if not _applies(fpath, c.applies_to, root):
+                    continue
+                if _is_rules_file(fpath):
+                    # A rules file naming its own forbidden token IS the rule,
+                    # never a breach of it. Unconditional: it holds even when the
+                    # rule explicitly scopes to markdown.
+                    continue
+                if not c.applies_to and is_prose_path(fpath or ""):
+                    # A code-token rule that named no language says nothing about
+                    # prose. Without this, documenting a rule violates it.
                     continue
                 if fpath and any(x in fpath for x in c.exclude_paths):
                     continue  # example / test / fixture / doc path — benign by destination

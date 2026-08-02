@@ -18,6 +18,39 @@ _C_FAMILY = {"ts", "tsx", "js", "jsx", "mjs", "cjs", "rs", "go", "java", "c",
 _HASH_FAMILY = {"py", "rb", "sh", "bash", "zsh", "yaml", "yml", "toml", "pl",
                 "r", "jl", "nim", "ex", "exs"}
 
+# Prose, not code. There is no comment or string syntax to blank in these, so a
+# forbidden token quoted in a *sentence* survives stripping and matches — which
+# is how "Never use `eval(`" fired as a violation against the very file that
+# documents the rule. A content check compiled from a code token says nothing
+# about prose, so unscoped content checks skip these entirely (see execute.py).
+# Enumerating prose rather than enumerating code is deliberate: an unknown
+# extension keeps being checked, so this narrows false alarms without silently
+# dropping coverage on a language we simply haven't listed.
+PROSE_EXTENSIONS = {
+    "md", "markdown", "mdx", "rst", "adoc", "asciidoc", "org", "tex",
+    "txt", "text", "csv", "tsv", "log", "lock",
+}
+# Extension-less files that are conventionally prose (strip_code treats an empty
+# extension as "could be any language", which is right for Makefile/Dockerfile
+# and wrong for these).
+PROSE_BASENAMES = {
+    "readme", "license", "licence", "changelog", "notice", "contributing",
+    "code_of_conduct", "authors", "copying", "codeowners",
+}
+
+
+def is_prose_path(path: str) -> bool:
+    """True when this file is prose rather than source we can reason about."""
+    if not path:
+        return False
+    base = path.replace("\\", "/").rsplit("/", 1)[-1]
+    stem, _, ext = base.rpartition(".")
+    if ext and ext.lower() in PROSE_EXTENSIONS:
+        return True
+    if not stem:  # no dot at all — judge by the name itself
+        return base.lower() in PROSE_BASENAMES
+    return False
+
 
 def _blank(s: str) -> str:
     """Same length, newlines preserved, everything else -> space."""
