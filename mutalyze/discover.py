@@ -33,6 +33,33 @@ def newest_session(cwd: str) -> Optional[str]:
     return files[0] if files else None
 
 
+def all_sessions() -> List[str]:
+    """Every transcript on this machine, newest first, across all projects.
+
+    Rule mining is the one thing that genuinely wants a wider net than the
+    current repo: a rule you stated while working somewhere else is still a rule
+    you set. Walks recursively — transcripts are not always one level deep, and
+    a single-level glob silently misses the rest.
+    """
+    root = os.path.expanduser("~/.claude/projects")
+    if not os.path.isdir(root):
+        return []
+    files: List[str] = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in filenames:
+            if name.endswith(".jsonl"):
+                files.append(os.path.join(dirpath, name))
+
+    def _mtime(path: str) -> float:
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            return 0.0
+
+    files.sort(key=_mtime, reverse=True)
+    return files
+
+
 def find_repo_root(start: str) -> str:
     """Walk up to the nearest .git; fall back to start."""
     cur = os.path.abspath(start)

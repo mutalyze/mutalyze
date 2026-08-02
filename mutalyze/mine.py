@@ -33,7 +33,6 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 from .compile_rules import _COMMAND_VERBS, classify, extract_candidates, find_rules_files
-from .store import norm_key
 
 # ---------------------------------------------------------------------------
 # Reading the human half of a transcript
@@ -141,6 +140,35 @@ _META_RE = re.compile(
     r"|thanks|thank you|sorry|nice|cool|great|perfect|looks? (?:good|terrible|ugly))\b",
     re.IGNORECASE,
 )
+
+# Reported speech: describing or quoting a rule is not setting one. "It says
+# things like 'always run the tests'" was mined as a rule about running tests,
+# attributing to the user something they were only reporting.
+_REPORTED_RE = re.compile(
+    r"\b(?:it says|says things like|the rule (?:is|says)|according to|claims"
+    r"|for example|e\.g\.|such as|verbatim|reads:|quoted|the docs? says?"
+    r"|says to|told me to|apparently)\b",
+    re.IGNORECASE,
+)
+
+# A one-off task, not a standing rule: an imperative aimed at a specific script
+# or path. "Run `python scripts/spotify_sync.py`" is something to do now.
+_IMPERATIVE_TASK_RE = re.compile(
+    r"^\s*(?:please\s+)?(?:run|execute|start|open|launch|try|check|look at)\b",
+    re.IGNORECASE,
+)
+_CONCRETE_PATH_RE = re.compile(
+    r"[\w./-]+\.(?:py|js|jsx|ts|tsx|sh|rb|go|rs|json|ya?ml|toml|md|txt|html|css)\b"
+    r"|(?:^|[\s`/])(?:scripts?|src|tests?|bin)/",
+    re.IGNORECASE,
+)
+# Modality that makes an instruction standing rather than momentary.
+_MODAL_RE = re.compile(
+    r"\b(?:always|never|every time|must|should|don'?t|do not|avoid|only|prefer"
+    r"|before (?:committing|finishing|pushing)|no more)\b",
+    re.IGNORECASE,
+)
+
 _QUESTION_RE = re.compile(r"\?\s*$")
 
 
@@ -154,16 +182,75 @@ _FILLER_RE = re.compile(
 )
 
 
+def _strip_markdown(text: str) -> str:
+    """Remove emphasis/heading/quote formatting, keeping the words.
+
+    Chat is full of markdown, and `**use-X-not-Y** (…)` was reaching the store
+    with its asterisks attached — a rule nobody typed, in a form no agent reads
+    cleanly. Backticks are deliberately preserved: the classifier keys off them.
+    """
+    out = text
+    out = re.sub(r"\*\*(.+?)\*\*", r"\1", out)      # **bold**
+    out = re.sub(r"(?<!\*)\*(?!\s)([^*]+?)(?<!\s)\*(?!\*)", r"\1", out)  # *em*
+    out = re.sub(r"__(.+?)__", r"\1", out)          # __bold__
+    out = re.sub(r"^\s*#{1,6}\s+", "", out)         # heading
+    out = re.sub(r"^\s*>\s?", "", out)              # blockquote
+    out = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", out)  # [text](link)
+    return out.strip()
+
+
 def _strip_leading_marks(text: str) -> str:
-    """Drop bullet markers, wrapping quotes, and conversational lead-ins."""
+    """Drop bullet markers, markdown, wrapping quotes, and conversational
+    lead-ins — repeatedly, since a pasted line often carries several at once."""
     out = text.strip()
     while True:
         stripped = re.sub(r'^\s*(?:[-*+]|\d+[.)])\s+', "", out)
+        stripped = _strip_markdown(stripped)
         stripped = _FILLER_RE.sub("", stripped)
         stripped = stripped.strip().strip('"').strip("'").strip()
+        # a label prefix ("rule:", "constraint:") announces a rule rather than
+        # being part of it — keep the rule, drop the announcement
+        stripped = re.sub(r"^(?:rule|constraint|note|reminder|policy|guideline)s?\s*[:\-–—]\s*",
+                          "", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"^[:\-–—]\s*", "", stripped)
         if stripped == out:
             return out
         out = stripped
+
+
+def mine_key(text: str) -> str:
+    """Grouping key for proposals — deliberately blunter than `norm_key`.
+
+    One rule restated in two renderings ("Use `pytest`, not unittest" and
+    "use pytest not unittest (it forbade the wrong one)") is one rule, and
+    showing it twice makes the review list look careless. Drops formatting,
+    backticks, parentheticals and punctuation, then keys on the opening words —
+    enough to merge restatements without merging genuinely different rules,
+    which diverge early.
+    """
+    t = _strip_markdown(text).lower()
+    t = re.sub(r"\(.*?\)", " ", t)          # parenthetical asides
+    t = t.replace("`", " ")
+    t = re.sub(r"[^a-z0-9 ]+", " ", t)
+    words = [w for w in t.split() if w]
+    return " ".join(words[:9])
+
+
+def _is_rule_shaped(sentence: str) -> bool:
+    """Reject the two shapes that look like rules but aren't.
+
+    Applied to bullets and loose prose alike, so a pasted list gets the same
+    scrutiny as a typed sentence.
+    """
+    if _REPORTED_RE.search(sentence):
+        return False  # describing a rule, not setting one
+    if (_IMPERATIVE_TASK_RE.match(sentence)
+            and _CONCRETE_PATH_RE.search(sentence)
+            and not _MODAL_RE.search(sentence)):
+        return False  # "run scripts/foo.py" — a task for now, not a standing rule
+    if sentence.count("`") % 2 == 1:
+        return False  # an unbalanced backtick means the sentence was cut
+    return True
 
 
 def _sentences(text: str) -> List[str]:
@@ -226,6 +313,8 @@ def rule_candidates(text: str) -> List[str]:
     # a pasted list of rules is exactly what the compiler already understands
     for bullet in extract_candidates(text):
         cleaned = _strip_leading_marks(bullet)
+        if not _is_rule_shaped(cleaned):
+            continue
         if _IMPERATIVE_RE.match(cleaned) or _PAIRED_RE.search(cleaned):
             found.append(cleaned)
 
@@ -234,6 +323,8 @@ def rule_candidates(text: str) -> List[str]:
         if not (12 <= len(sentence) <= 200):
             continue
         if _QUESTION_RE.search(sentence) or _META_RE.search(sentence):
+            continue
+        if not _is_rule_shaped(sentence):
             continue
         if not (_IMPERATIVE_RE.match(sentence) or _PAIRED_RE.search(sentence)):
             continue
@@ -250,7 +341,7 @@ def rule_candidates(text: str) -> List[str]:
     seen: Set[str] = set()
     out: List[str] = []
     for c in found:
-        key = norm_key(c)
+        key = mine_key(c)
         if key in seen:
             continue
         seen.add(key)
@@ -299,9 +390,9 @@ def known_rule_keys(repo_root: str, store_rules: Optional[List[str]] = None) -> 
         except OSError:
             continue
         for rule in extract_candidates(text):
-            keys.add(norm_key(rule))
+            keys.add(mine_key(rule))
     for text in store_rules or []:
-        keys.add(norm_key(text))
+        keys.add(mine_key(text))
     return keys
 
 
@@ -317,7 +408,7 @@ def mine_sessions(paths: List[str], known: Optional[Set[str]] = None) -> MineRes
         result.sessions_scanned += 1
         for said in user_messages(path):
             for candidate in rule_candidates(said.text):
-                key = norm_key(candidate)
+                key = mine_key(candidate)
                 if key in known:
                     result.already_known += 1
                     continue

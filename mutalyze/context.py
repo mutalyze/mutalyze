@@ -182,6 +182,79 @@ class ScoredRule:
         return self.entry.text
 
 
+# Concepts: the words a person uses for the activity a rule governs. Relevance
+# was pure literal matching, so "search the codebase for TODOs" did not surface
+# "use `rg` not `grep`" — the prompt says *search*, the rule says *grep*. This is
+# a lookup table, not comprehension: still deterministic, still no LLM, and it
+# scores BELOW a literal hit so exact mentions always win and `--explain` stays
+# honest about which kind of match fired.
+_CONCEPTS = {
+    ("grep", "rg", "ripgrep", "ag", "ack"):
+        {"search", "searching", "searched", "find", "finding", "look for",
+         "looking for", "locate", "scan for"},
+    ("git commit", "commit"):
+        {"commit", "committing", "check in", "checking in"},
+    ("git push", "push", "git push --force"):
+        {"push", "pushing", "land", "landing", "publish", "ship"},
+    ("git merge", "merge"):
+        {"merge", "merging", "rebase"},
+    ("pytest", "jest", "vitest", "unittest", "cargo test", "npm test"):
+        {"test", "tests", "testing", "spec", "specs", "suite"},
+    ("npm", "pnpm", "yarn", "pip", "poetry", "uv"):
+        {"install", "installing", "dependency", "dependencies", "package",
+         "packages", "add a library"},
+    ("print(", "console.log", "println!", "fmt.println"):
+        {"debug", "debugging", "log", "logging", "trace", "print"},
+    ("eval(", "exec("):
+        {"eval", "evaluate", "dynamic code", "execute code"},
+    ("rm -rf", "rm"):
+        {"delete", "deleting", "remove", "removing", "clean up", "cleanup", "wipe"},
+    ("curl", "wget"):
+        {"download", "downloading", "fetch", "fetching"},
+    ("docker", "kubectl", "helm"):
+        {"deploy", "deploying", "container", "cluster"},
+}
+
+
+def _word_in(words: Set[str], text: str) -> Optional[str]:
+    """First of `words` present in `text` as a whole word.
+
+    Substring matching is not good enough here: "log" is inside "blog post",
+    which scored a logging rule as relevant to writing a blog announcement.
+    Multi-word entries ("look for") are matched as phrases.
+    """
+    for word in sorted(words):
+        if not word:
+            continue
+        if re.search(r"(?<!\w)%s(?!\w)" % re.escape(word), text):
+            return word
+    return None
+
+
+def _concept_words(token: str) -> Set[str]:
+    """Human words for a rule's token, or empty when we have no mapping."""
+    low = token.lower().strip()
+    for keys, words in _CONCEPTS.items():
+        if low in keys or any(low.startswith(k + " ") for k in keys):
+            return words
+    return set()
+
+
+def _language_words(globs: List[str]) -> Set[str]:
+    """Language names for a content rule's globs ("*.ts" -> typescript, ts).
+
+    Derived from the compiler's own _LANG_GLOBS so the two cannot drift apart.
+    """
+    from .compile_rules import _LANG_GLOBS
+
+    stems = {g.lstrip("*.").lower() for g in globs}
+    out: Set[str] = set()
+    for name, mapped in _LANG_GLOBS.items():
+        if stems & {m.lstrip("*.").lower() for m in mapped}:
+            out.add(name)
+    return out | stems
+
+
 def _globs_match_ext(globs: List[str], extensions: Set[str]) -> Optional[str]:
     for glob in globs:
         stem = glob.lstrip("*.").lower()
@@ -213,16 +286,42 @@ def score_rules(
         if prompt_low:
             # the user's own words are the strongest signal available
             if check is not None:
+                literal_hit = False
                 for literal in _forbidden_literals(check):
                     if literal and literal in prompt_low:
                         s.score += 3
                         s.reasons.append("prompt mentions '%s'" % literal)
+                        literal_hit = True
                         break
+                if not literal_hit:
+                    # no exact mention — try the activity the rule governs
+                    for literal in _forbidden_literals(check):
+                        words = _concept_words(literal)
+                        match = _word_in(words, prompt_low)
+                        if match:
+                            s.score += 2
+                            s.reasons.append("prompt is about %s (rule governs '%s')"
+                                             % (match, literal))
+                            break
                 if check.type == CONTENT and check.applies_to:
                     hit = _globs_match_ext(check.applies_to, _exts_in(prompt_low))
                     if hit:
                         s.score += 3
                         s.reasons.append("prompt mentions %s files" % hit)
+                    else:
+                        lang = _word_in(_language_words(check.applies_to), prompt_low)
+                        if lang:
+                            s.score += 2
+                            s.reasons.append("prompt is about %s" % lang)
+                if check.type == ORDERING and check.trigger:
+                    # reuse the compiler's own word->tool mapping
+                    from .compile_rules import _TOOL_WORDS
+
+                    triggers = {w for w, tool in _TOOL_WORDS.items() if tool == check.trigger}
+                    match = _word_in(triggers, prompt_low)
+                    if match:
+                        s.score += 2
+                        s.reasons.append("prompt is about %s" % match)
             for word in _keywords(entry.text):
                 if word in prompt_low:
                     s.score += 1
