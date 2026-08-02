@@ -372,15 +372,21 @@ def _warn_compose(result) -> None:
 def cmd_rules_mine(args: argparse.Namespace) -> int:
     """Propose rules you stated in chat but never wrote down. Writes nothing
     unless the user explicitly approves with --apply/--only."""
-    from .discover import list_sessions
+    from .discover import all_sessions, list_sessions
     from .mine import known_rule_keys, mine_sessions
     from .store import add_rule, load_store, save_store
 
     repo_root = os.path.abspath(args.repo) if args.repo else find_repo_root(os.getcwd())
-    sessions = list_sessions(repo_root)
+    if args.all_projects:
+        # A rule you stated while working elsewhere is still a rule you set.
+        sessions = all_sessions()
+        where = "every project on this machine"
+    else:
+        sessions = list_sessions(repo_root)
+        where = "this repo"
     if not sessions:
-        _err("ERROR  No session transcripts found for this repo.\n"
-             "       Looked in: %s" % project_transcript_dir(repo_root))
+        _err("ERROR  No session transcripts found for %s.\n"
+             "       Looked in: %s" % (where, project_transcript_dir(repo_root)))
         return 2
     if args.sessions > 0:
         sessions = sessions[: args.sessions]
@@ -390,7 +396,8 @@ def cmd_rules_mine(args: argparse.Namespace) -> int:
     result = mine_sessions(sessions, known=known)
 
     shown = [p for p in result.proposals if args.all or p.checkable]
-    _out("Scanned %d session(s) for rules you stated in chat." % result.sessions_scanned)
+    _out("Scanned %d session(s) across %s for rules you stated in chat."
+         % (result.sessions_scanned, where))
     _out("  %d already covered by your rules file or store." % result.already_known)
     if not shown:
         hidden = len(result.proposals)
@@ -649,6 +656,8 @@ def build_parser() -> argparse.ArgumentParser:
     rm_.add_argument("--repo", help="repo root (default: nearest .git above cwd)")
     rm_.add_argument("--sessions", type=int, default=10,
                      help="how many recent sessions to scan, newest first (0 = all)")
+    rm_.add_argument("--all-projects", action="store_true",
+                     help="scan every project on this machine, not just this repo")
     rm_.add_argument("--bundle", default=STORE_DEFAULT_BUNDLE,
                      help="bundle to add approved rules to (default: %s)" % STORE_DEFAULT_BUNDLE)
     rm_.add_argument("--all", action="store_true",

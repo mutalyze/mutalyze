@@ -81,6 +81,46 @@ def main():
     calm = score_rules(entries, prompt="what time is it")
     check(all(s.score == 0 for s in calm), "an unrelated prompt scores nothing")
 
+    # ---- concept relevance: the words people actually use ----------------
+    # Ranking used to be literal-only, so "search" never reached a rule whose
+    # token is "grep". Each pair below names no rule token at all.
+    concept_cases = [
+        ("search the codebase for TODOs", "`rg`"),
+        ("look for every call site", "`rg`"),
+        ("commit this work", "main"),
+    ]
+    for prompt, needle in concept_cases:
+        ranked = score_rules(entries, prompt=prompt)
+        check(needle in ranked[0].text,
+              "concept prompt %r ranks the right rule first (got %r)"
+              % (prompt, ranked[0].text[:44]))
+        check(ranked[0].score > 0 and ranked[0].reasons,
+              "the concept hit explains itself for %r" % prompt)
+
+    # A language name lifts the rule for that language. Not asserted as rank 1:
+    # "read before editing" also fires here, and when you are editing that rule
+    # is genuinely relevant too — the goal is surfacing, not a fixed order.
+    ts = {s.text: s for s in score_rules(entries, prompt="add a banner while editing the typescript")}
+    ts_rule = [s for t, s in ts.items() if "console.log" in t][0]
+    check(ts_rule.score > 0 and any("typescript" in r for r in ts_rule.reasons),
+          "naming a language lifts that language's rule (%r)" % ts_rule.reasons)
+
+    # a literal mention must still outrank a merely conceptual one
+    literal = score_rules(entries, prompt="stop using grep")
+    concept = score_rules(entries, prompt="stop searching that way")
+    lit_rg = [s for s in literal if "`rg`" in s.text][0]
+    con_rg = [s for s in concept if "`rg`" in s.text][0]
+    check(lit_rg.score > con_rg.score,
+          "an exact mention scores above a concept match (%d vs %d)"
+          % (lit_rg.score, con_rg.score))
+
+    # Concepts must not fire on a word that merely *contains* a concept word:
+    # "blog post" scored a logging rule as relevant before word-boundary matching.
+    noise = score_rules(entries, prompt="write the release announcement blog post")
+    for s in noise:
+        check(not any("rule governs" in r for r in s.reasons),
+              "no concept match on 'blog post' (%r fired %r)" % (s.text[:32], s.reasons))
+
     # ---- relevance from session activity ---------------------------------
     session = os.path.join(tmp, "sess.jsonl")
     with open(session, "w", encoding="utf-8") as fh:

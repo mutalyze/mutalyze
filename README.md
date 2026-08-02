@@ -355,7 +355,14 @@ and `unsupported` counts, not just the violation count.
 - Mining leans strict, and misses on purpose. A rule stated vaguely, spread across
   several sentences, or implied by a correction rather than said outright will not
   be proposed — a junk proposal costs more trust than a missed one. Expect to still
-  write some rules by hand.
+  write some rules by hand. By default it reads only *this repo's* sessions; pass
+  `--all-projects` for every project on the machine, which is usually where the
+  rules you set once and reuse everywhere actually live.
+- Relevance understands a fixed vocabulary, not language. A lookup table maps a
+  rule's token to the words people use for that activity ("search" reaches a
+  `grep` rule; "install" reaches an `npm` rule), and an exact mention always
+  outranks a conceptual one. Outside that table it is still literal matching, so
+  an unusual phrasing will not surface the rule.
 - Conflict detection is narrow. It flags only an explicit endorse-versus-forbid on
   the same token. Two rules that contradict each other in prose, without a shared
   backticked token, are not detected.
@@ -385,7 +392,20 @@ On the 10,420-line session with four compactions, a naïve `parentUuid`-only tra
 ./.venv/bin/python tests/test_store.py              # rule store: bundles, dedupe, conflicts, compose round-trip
 ./.venv/bin/python tests/test_mine.py               # mining: human-only extraction, precision filters, citations
 ./.venv/bin/python tests/test_context.py            # relevance ranking, budget trimming, compaction detection
+./.venv/bin/python tests/test_mine_precision.py     # one test per mining defect found on real data
+./.venv/bin/python tests/validate_mining.py         # mining precision, criteria frozen in the file header
 ```
+
+**Mining precision (machine-wide, hand-adjudicated).** Measured over the 60
+largest sessions on this machine, against criteria frozen in
+`tests/validate_mining.py` *before* the numbers were produced (the §0 discipline
+above). Widening the corpus from one repo to the whole machine first took
+precision to **70.0%** (21 true / 9 false / 5 unsure) with four repeating defect
+classes: markdown artifacts, near-duplicate restatements, reported speech, and
+one-off commands. After fixing those: **100.0%** (22 true / 0 false / 7 unsure) —
+with the true-rule count *up*, so precision did not come from proposing less.
+Both numbers are reproducible with the command above. This is still one person's
+transcripts; other people's sessions remain the number that matters.
 
 **Rule memory is not yet validated on other people's sessions.** The store, mining,
 and relevance ranking are covered by the test suites above and were exercised on
