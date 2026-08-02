@@ -332,6 +332,12 @@ and `unsupported` counts, not just the violation count.
   file like `config.ts`, which is the common case. Content alone can't tell a
   real key from a test fixture, so it errs toward not firing. This is not secret
   scanning.
+- Content checks are for code, not prose. A rule compiled from a code token
+  (`eval(`, `print()`, `console.log`) is skipped in Markdown, reStructuredText,
+  plain text and similar, and never fires on a rules file — otherwise
+  *documenting* a rule violates it, which is exactly what happened before this
+  was fixed. A rule that names its own file type (`applies_to`) keeps the scope
+  you gave it. The trade: a code token quoted in a doc is not reported.
 - Checkable rules skew trivial. Across 128 real rules files, roughly 65% of
   normative lines are mechanically checkable, but that 65% is weighted toward the
   cheap ones (`rg` vs `grep`, dangerous commands), not the rules you most care
