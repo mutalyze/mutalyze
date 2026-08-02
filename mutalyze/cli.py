@@ -709,12 +709,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    from .store import StoreError
+
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
         parser.print_help()
         return 0
-    return args.func(args)
+    try:
+        return args.func(args)
+    except StoreError as err:
+        # The store is advertised as hand-editable, so a broken one is a user
+        # situation with a fix, not an internal fault. Explain, don't traceback.
+        _err("ERROR  %s" % err)
+        return 2
+    except KeyboardInterrupt:
+        _err("\nInterrupted.")
+        return 130
 
 
 if __name__ == "__main__":
